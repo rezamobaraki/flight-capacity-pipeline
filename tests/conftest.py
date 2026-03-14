@@ -6,8 +6,8 @@ import pytest
 
 from src.core.settings import Settings
 from src.domains.aircraft import Aircraft
-from src.repositories.sqlite_repository import SQLiteRepository  # Keep for fallback comparison if needed, but tests should use container default or DuckDB
-from src.repositories.duckdb_repository import DuckDBRepository
+from src.domains.flight import Flight
+from src.repositories.sqlite_repository import SQLiteRepository
 from src.services.capacity_service import CapacityService
 from src.services.file_service import FileService
 from src.services.flight_aggregator import FlightAggregatorService
@@ -74,9 +74,7 @@ def settings(tmp_data_dir):
 
 @pytest.fixture
 def repository(settings):
-    # Depending on what we want to test: generic interface or specific implementation
-    # Since we switched the app to DuckDB, let's test DuckDB
-    repo = DuckDBRepository(settings.DATABASE_PATH)
+    repo = SQLiteRepository(settings.DATABASE_PATH)
     repo.initialize()
     yield repo
     repo.close()
@@ -87,7 +85,7 @@ def pipeline(settings, repository):
     file_service = FileService()
     aggregator = FlightAggregatorService()
     capacity_service = CapacityService()
-    
+
     return PipelineService(
         file_service=file_service,
         aggregator=aggregator,

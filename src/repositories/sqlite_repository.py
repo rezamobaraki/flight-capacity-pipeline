@@ -21,19 +21,11 @@ class SQLiteRepository(AbstractRepository):
 
     @property
     def connection(self) -> sqlite3.Connection:
-        """
-        Returns the active database connection.
-        Raises DatabaseNotInitializedError if initialize() hasn't been called.
-        """
         if self._active_connection is None:
             raise DatabaseNotInitializedError()
         return self._active_connection
 
     def initialize(self) -> None:
-        """
-        Initializes the database connection and creates required tables.
-        Idempotent operation.
-        """
         if self._active_connection is not None:
             logger.debug("Database already initialized")
             return
@@ -42,7 +34,6 @@ class SQLiteRepository(AbstractRepository):
 
         try:
             self._active_connection = sqlite3.connect(str(self._database_path), check_same_thread=False)
-            # Use Row factory for dict-like access
             self._active_connection.row_factory = sqlite3.Row
 
             self._create_schema()
@@ -53,17 +44,15 @@ class SQLiteRepository(AbstractRepository):
             raise
 
     def _create_schema(self) -> None:
-        """Executes the DDL script to create tables."""
         with self.connection:
             self.connection.executescript(queries.CREATE_TABLES_SCRIPT)
 
-    def is_empty(self) -> bool:
-        """Checks if the capacity table has any records."""
-        cursor = self.connection.execute(queries.CHECK_IS_EMPTY)
+    def is_exists(self) -> bool:
+        cursor = self.connection.execute(queries.CHECK_IS_EXISTS)
         count = cursor.fetchone()[0]
         return count == 0
 
-    def save_aircraft_batch(self, aircraft_list: list[Aircraft]) -> int:
+    def bulk_create_aircraft(self, aircraft_list: list[Aircraft]) -> int:
         if not aircraft_list:
             return 0
 
@@ -80,9 +69,9 @@ class SQLiteRepository(AbstractRepository):
             for aircraft in aircraft_list
         ]
 
-        return self._execute_batch_save(sql=queries.INSERT_AIRCRAFT, parameters=parameters, record_type="aircraft")
+        return self._bulk_create(sql=queries.INSERT_AIRCRAFT, parameters=parameters, record_type="aircraft")
 
-    def save_flights_batch(self, flights: list[Flight]) -> int:
+    def bulk_create_flights(self, flights: list[Flight]) -> int:
         if not flights:
             return 0
 
@@ -102,9 +91,9 @@ class SQLiteRepository(AbstractRepository):
             for flight in flights
         ]
 
-        return self._execute_batch_save(sql=queries.INSERT_FLIGHT, parameters=parameters, record_type="flights")
+        return self._bulk_create(sql=queries.INSERT_FLIGHT, parameters=parameters, record_type="flights")
 
-    def save_capacity_batch(self, capacities: list[Capacity]) -> int:
+    def bulk_create_capacity(self, capacities: list[Capacity]) -> int:
         if not capacities:
             return 0
 
@@ -127,12 +116,9 @@ class SQLiteRepository(AbstractRepository):
             for capacity in capacities
         ]
 
-        return self._execute_batch_save(sql=queries.INSERT_CAPACITY, parameters=parameters, record_type="capacity")
+        return self._bulk_create(sql=queries.INSERT_CAPACITY, parameters=parameters, record_type="capacity")
 
-    def _execute_batch_save(self, sql: str, parameters: list[tuple], record_type: str) -> int:
-        """
-        Helper method to execute batch inserts within a transaction.
-        """
+    def _bulk_create(self, sql: str, parameters: list[tuple], record_type: str) -> int:
         try:
             with self.connection:
                 self.connection.executemany(sql, parameters)
@@ -152,35 +138,27 @@ class SQLiteRepository(AbstractRepository):
         date: str | None = None,
     ) -> list[Capacity]:
         query = queries.SELECT_CAPACITY_BASE
-        parameters: list[str] = []
+        parameters: dict[str, str] = {}
 
         if origin:
-            query += " AND origin_iata = ?"
-            parameters.append(origin.upper())
+            query += " AND origin_iata = :origin"
+            parameters["origin"] = origin.upper()
         if destination:
-            query += " AND destination_iata = ?"
-            parameters.append(destination.upper())
+            query += " AND destination_iata = :destination"
+            parameters["destination"] = destination.upper()
         if date:
-            query += " AND date = ?"
-            parameters.append(date)
+            query += " AND date = :date"
+            parameters["date"] = date
 
         query += " ORDER BY date, origin_iata, destination_iata"
 
         cursor = self.connection.execute(query, parameters)
-        return [self._map_row_to_capacity(row) for row in cursor.fetchall()]
+        return [Capacity.model_validate(row) for row in cursor.fetchall()]
 
     def get_aircraft_map(self) -> dict[str, Aircraft]:
         cursor = self.connection.execute(queries.SELECT_ALL_AIRCRAFT)
         return {
-            row["code_icao"]: Aircraft(
-                code_icao=row["code_icao"],
-                code_iata=row["code_iata"],
-                full_name=row["full_name"],
-                category=row["category"],
-                average_speed_mph=row["average_speed_mph"],
-                volume=row["volume"],
-                payload=row["payload"],
-            )
+            row["code_icao"]: Aircraft.model_validate(row)
             for row in cursor.fetchall()
         }
 
@@ -190,21 +168,5 @@ class SQLiteRepository(AbstractRepository):
             self._active_connection = None
             logger.info("Database connection closed")
 
-    @staticmethod
-    def _map_row_to_capacity(row: sqlite3.Row) -> Capacity:
-        """Maps a SQLite row to a Capacity domain object."""
-        return Capacity(
-            flight_id=row["flight_id"],
-            flight_number=row["flight_number"] or "",
-            date=row["date"],
-            origin_iata=row["origin_iata"] or "",
-            origin_icao=row["origin_icao"] or "",
-            destination_iata=row["destination_iata"] or "",
-            destination_icao=row["destination_icao"] or "",
-            equipment=row["equipment"] or "",
-            aircraft_name=row["aircraft_name"] or "",
-            category=row["category"] or "",
-            volume_m3=row["volume_m3"] or 0.0,
-            payload_kg=row["payload_kg"] or 0.0,
-            operator=row["operator"] or "",
-        )
+    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
+        self.close()

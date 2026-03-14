@@ -17,7 +17,7 @@ async def lifespan(app: FastAPI):
     logger.info("Initializing application resources...")
     container.repository.initialize()
 
-    if container.repository.is_empty():
+    if container.repository.is_exists():
         logger.info("Database is empty. Starting initial data pipeline...")
         try:
             container.pipeline.run()

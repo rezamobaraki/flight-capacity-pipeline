@@ -46,7 +46,7 @@ CREATE_TABLES_SCRIPT = """
         ON capacity(date);
 """
 
-CHECK_IS_EMPTY = "SELECT COUNT(*) FROM capacity"
+CHECK_IS_EXISTS = "SELECT COUNT(*) FROM capacity"
 
 INSERT_AIRCRAFT = """
     INSERT OR REPLACE INTO aircraft (
