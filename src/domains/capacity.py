@@ -15,3 +15,12 @@ class Capacity(BaseModel):
     volume_m3: float = 0.0
     payload_kg: float = 0.0
     operator: str = ""
+
+
+class CapacitySummary(BaseModel):
+    date: str
+    origin_iata: str
+    destination_iata: str
+    total_flights: int
+    total_volume_m3: float
+    total_payload_kg: float

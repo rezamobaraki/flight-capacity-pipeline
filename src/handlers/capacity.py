@@ -1,11 +1,11 @@
 import logging
-from collections import defaultdict
+
 
 from fastapi import APIRouter, Depends
 
-from src.schemas.requests import CapacityRequest, CapacitySummaryRequest
 from src.core.container import get_repository
 from src.repositories.interfaces import AbstractRepository
+from src.schemas.requests import CapacityRequest, CapacitySummaryRequest
 from src.schemas.responses import (
     CapacityListResponse,
     CapacityResponse,
@@ -23,11 +23,12 @@ async def get_capacity(
     params: CapacityRequest = Depends(),
     repository: AbstractRepository = Depends(get_repository),
 ) -> CapacityListResponse:
-    capacities = repository.get_capacity(
+    capacity_iter = repository.get_all_capacities(
         origin=params.origin,
         destination=params.destination,
         date=params.date,
     )
+    capacities = list(capacity_iter)
     return CapacityListResponse(
         count=len(capacities),
         capacities=[CapacityResponse(**c.model_dump()) for c in capacities],
@@ -39,26 +40,15 @@ async def get_daily_summary(
     params: CapacitySummaryRequest = Depends(),
     repository: AbstractRepository = Depends(get_repository),
 ) -> DailySummaryListResponse:
-    capacities = repository.get_capacity(
+    summary_iter = repository.get_capacity_summary(
         origin=params.origin,
         destination=params.destination,
         date=params.date,
     )
 
-    daily: dict[str, list] = defaultdict(list)
-    for c in capacities:
-        daily[c.date].append(c)
-
     summaries = [
-        DailySummaryResponse(
-            date=d,
-            origin_iata=params.origin,
-            destination_iata=params.destination,
-            total_flights=len(caps),
-            total_volume_m3=round(sum(c.volume_m3 for c in caps), 2),
-            total_payload_kg=round(sum(c.payload_kg for c in caps), 2),
-        )
-        for d, caps in sorted(daily.items())
+        DailySummaryResponse(**s.model_dump())
+        for s in summary_iter
     ]
 
     return DailySummaryListResponse(count=len(summaries), summaries=summaries)

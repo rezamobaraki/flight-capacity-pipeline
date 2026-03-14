@@ -1,11 +1,13 @@
 import logging
 import sqlite3
 from pathlib import Path
+from typing import Iterable, Iterator
 
 from src.core.exceptions import DatabaseNotInitializedError
 from src.domains.aircraft import Aircraft
-from src.domains.capacity import Capacity
+from src.domains.capacity import Capacity, CapacitySummary
 from src.domains.flight import Flight
+from src.domains.flight_event import FlightEvent
 from src.repositories import queries
 from src.repositories.interfaces import AbstractRepository
 
@@ -52,91 +54,43 @@ class SQLiteRepository(AbstractRepository):
         count = cursor.fetchone()[0]
         return count == 0
 
-    def bulk_create_aircraft(self, aircraft_list: list[Aircraft]) -> int:
-        if not aircraft_list:
-            return 0
+    def bulk_insert_aircraft(self, aircraft: Iterable[Aircraft]) -> int:
+        return self._bulk_insert(aircraft, queries.INSERT_AIRCRAFT)
 
-        parameters = [
-            (
-                aircraft.code_icao,
-                aircraft.code_iata,
-                aircraft.full_name,
-                aircraft.category,
-                aircraft.average_speed_mph,
-                aircraft.volume,
-                aircraft.payload,
-            )
-            for aircraft in aircraft_list
-        ]
+    def bulk_insert_flights(self, flights: Iterable[Flight]) -> int:
+        return self._bulk_insert(flights, queries.INSERT_FLIGHT)
 
-        return self._bulk_create(sql=queries.INSERT_AIRCRAFT, parameters=parameters, record_type="aircraft")
+    def bulk_insert_capacity(self, capacities: Iterable[Capacity]) -> int:
+        return self._bulk_insert(capacities, queries.INSERT_CAPACITY)
 
-    def bulk_create_flights(self, flights: list[Flight]) -> int:
-        if not flights:
-            return 0
+    def bulk_insert_events(self, events: Iterable[FlightEvent]) -> int:
+        return self._bulk_insert(events, queries.INSERT_EVENT)
 
-        parameters = [
-            (
-                flight.flight_id,
-                flight.flight_number,
-                flight.date,
-                flight.origin_iata,
-                flight.origin_icao,
-                flight.destination_iata,
-                flight.destination_icao,
-                flight.equipment,
-                flight.operator,
-                flight.registration,
-            )
-            for flight in flights
-        ]
+    def _bulk_insert(self, data: Iterable, sql: str) -> int:
+        count = 0
+        with self.connection as conn:
+            for chunk in self._chunk_stream(data):
+                conn.executemany(
+                    sql,
+                    [x.model_dump() for x in chunk],
+                )
+                count += len(chunk)
+        return count
 
-        return self._bulk_create(sql=queries.INSERT_FLIGHT, parameters=parameters, record_type="flights")
+    def aggregate_flights(self) -> int:
+        with self.connection as conn:
+            cursor = conn.execute(queries.AGGREGATE_FLIGHTS)
+            return cursor.rowcount
 
-    def bulk_create_capacity(self, capacities: list[Capacity]) -> int:
-        if not capacities:
-            return 0
+    def get_all_flights(self) -> Iterator[Flight]:
+        with self.connection as conn:
+            cursor = conn.execute("SELECT * FROM flights")
+            for row in cursor:
+                yield Flight.model_validate(dict(row))
 
-        parameters = [
-            (
-                capacity.flight_id,
-                capacity.flight_number,
-                capacity.date,
-                capacity.origin_iata,
-                capacity.origin_icao,
-                capacity.destination_iata,
-                capacity.destination_icao,
-                capacity.equipment,
-                capacity.aircraft_name,
-                capacity.category,
-                capacity.volume_m3,
-                capacity.payload_kg,
-                capacity.operator,
-            )
-            for capacity in capacities
-        ]
-
-        return self._bulk_create(sql=queries.INSERT_CAPACITY, parameters=parameters, record_type="capacity")
-
-    def _bulk_create(self, sql: str, parameters: list[tuple], record_type: str) -> int:
-        try:
-            with self.connection:
-                self.connection.executemany(sql, parameters)
-
-            record_count = len(parameters)
-            logger.info("Successfully saved %d %s records", record_count, record_type)
-            return record_count
-
-        except sqlite3.Error as error:
-            logger.error(f"Failed to save {record_type} batch: {error}")
-            raise
-
-    def get_capacity(
-        self,
-        origin: str | None = None,
-        destination: str | None = None,
-        date: str | None = None,
-    ) -> list[Capacity]:
+    def get_all_capacities(
+        self, origin: str | None = None, destination: str | None = None, date: str | None = None
+    ) -> Iterator[Capacity]:
         query = queries.SELECT_CAPACITY_BASE
         parameters: dict[str, str] = {}
 
@@ -153,14 +107,35 @@ class SQLiteRepository(AbstractRepository):
         query += " ORDER BY date, origin_iata, destination_iata"
 
         cursor = self.connection.execute(query, parameters)
-        return [Capacity.model_validate(row) for row in cursor.fetchall()]
+        for row in cursor:
+            yield Capacity.model_validate(dict(row))
+
+    def get_capacity_summary(
+        self,
+        origin: str,
+        destination: str,
+        date: str | None = None
+    ) -> Iterator[CapacitySummary]:
+        query = queries.SELECT_CAPACITY_SUMMARY
+        parameters = {"origin": origin, "destination": destination}
+
+        if date:
+            query += " AND date = :date"
+            parameters["date"] = date
+
+        query += " GROUP BY date ORDER BY date"
+
+        cursor = self.connection.execute(query, parameters)
+        for row in cursor:
+            yield CapacitySummary(
+                origin_iata=origin,
+                destination_iata=destination,
+                **dict(row)
+            )
 
     def get_aircraft_map(self) -> dict[str, Aircraft]:
         cursor = self.connection.execute(queries.SELECT_ALL_AIRCRAFT)
-        return {
-            row["code_icao"]: Aircraft.model_validate(row)
-            for row in cursor.fetchall()
-        }
+        return {row["code_icao"]: Aircraft.model_validate(dict(row)) for row in cursor.fetchall()}
 
     def close(self) -> None:
         if self._active_connection:
@@ -170,3 +145,15 @@ class SQLiteRepository(AbstractRepository):
 
     def __exit__(self, exc_type, exc_val, exc_tb) -> None:
         self.close()
+
+
+    @staticmethod
+    def _chunk_stream(iterator: Iterable, size: int = 1000) -> Iterator[list]:
+        buffer = []
+        for item in iterator:
+            buffer.append(item)
+            if len(buffer) >= size:
+                yield buffer
+                buffer = []
+        if buffer:
+            yield buffer

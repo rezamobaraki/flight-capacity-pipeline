@@ -23,14 +23,14 @@ class FlightEvent(BaseModel):
 
     @field_validator("altitude", mode="before")
     @classmethod
-    def coerce_altitude(cls, v: str | int) -> int:
-        if not v and v != 0:
+    def coerce_altitude(cls, value: str | int) -> int:
+        if not value and value != 0:
             return 0
-        return int(v)
+        return int(value)
 
     @field_validator("latitude", "longitude", mode="before")
     @classmethod
-    def coerce_coordinate(cls, v: str | float | None) -> float | None:
-        if not v and v != 0:
+    def coerce_coordinate(cls, value: str | float | None) -> float | None:
+        if not value and value != 0:
             return None
-        return float(v)
+        return float(value)

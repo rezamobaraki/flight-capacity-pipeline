@@ -10,7 +10,7 @@ from src.domains.flight import Flight
 from src.repositories.sqlite_repository import SQLiteRepository
 from src.services.capacity_service import CapacityService
 from src.services.file_service import FileService
-from src.services.flight_aggregator import FlightAggregatorService
+
 from src.services.pipeline_service import PipelineService
 
 SAMPLE_AIRCRAFT = [
@@ -83,12 +83,10 @@ def repository(settings):
 @pytest.fixture
 def pipeline(settings, repository):
     file_service = FileService()
-    aggregator = FlightAggregatorService()
     capacity_service = CapacityService()
 
     return PipelineService(
         file_service=file_service,
-        aggregator=aggregator,
         capacity_service=capacity_service,
         repository=repository,
         aircraft_path=settings.AIRCRAFT_FILE,
