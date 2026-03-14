@@ -18,7 +18,7 @@ class TestSQLiteRepository:
         ]
         count = repo.bulk_insert_aircraft(aircraft)
         assert count == 1
-        amap = repo.get_aircraft_map()
+        amap = {a.code_icao: a for a in repo.get_all_aircraft()}
         assert "A388" in amap
         assert amap["A388"].full_name == "Airbus A380-800"
 

@@ -82,6 +82,11 @@ class SQLiteRepository(AbstractRepository):
             cursor = conn.execute(queries.AGGREGATE_FLIGHTS)
             return cursor.rowcount
 
+    def calculate_capacity(self) -> int:
+        with self.connection as conn:
+            cursor = conn.execute(queries.CALCULATE_CAPACITY)
+            return cursor.rowcount
+
     def get_all_flights(self) -> Iterator[Flight]:
         with self.connection as conn:
             cursor = conn.execute("SELECT * FROM flights")
@@ -133,9 +138,10 @@ class SQLiteRepository(AbstractRepository):
                 **dict(row)
             )
 
-    def get_aircraft_map(self) -> dict[str, Aircraft]:
+    def get_all_aircraft(self) -> Iterator[Aircraft]:
         cursor = self.connection.execute(queries.SELECT_ALL_AIRCRAFT)
-        return {row["code_icao"]: Aircraft.model_validate(dict(row)) for row in cursor.fetchall()}
+        for row in cursor:
+            yield Aircraft.model_validate(dict(row))
 
     def close(self) -> None:
         if self._active_connection:

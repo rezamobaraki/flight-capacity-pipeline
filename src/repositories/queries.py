@@ -153,6 +153,33 @@ INSERT_CAPACITY = """
     )
 """
 
+CALCULATE_CAPACITY = """
+    INSERT OR REPLACE INTO capacity (
+        flight_id, flight_number, date,
+        origin_iata, origin_icao,
+        destination_iata, destination_icao,
+        equipment, aircraft_name, category,
+        volume_m3, payload_kg, operator
+    )
+    SELECT
+        f.flight_id,
+        f.flight_number,
+        f.date,
+        f.origin_iata,
+        f.origin_icao,
+        f.destination_iata,
+        f.destination_icao,
+        f.equipment,
+        a.full_name as aircraft_name,
+        a.category,
+        a.volume as volume_m3,
+        a.payload as payload_kg,
+        f.operator
+    FROM flights f
+    JOIN aircraft a ON f.equipment = a.code_icao
+    WHERE f.equipment IS NOT NULL AND f.equipment != '';
+"""
+
 SELECT_ALL_AIRCRAFT = "SELECT * FROM aircraft"
 
 SELECT_CAPACITY_BASE = "SELECT * FROM capacity WHERE 1=1"

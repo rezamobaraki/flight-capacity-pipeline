@@ -8,7 +8,6 @@ from src.core.settings import Settings
 from src.domains.aircraft import Aircraft
 from src.domains.flight import Flight
 from src.repositories.sqlite_repository import SQLiteRepository
-from src.services.capacity_service import CapacityService
 from src.services.file_service import FileService
 
 from src.services.pipeline_service import PipelineService
@@ -83,11 +82,9 @@ def repository(settings):
 @pytest.fixture
 def pipeline(settings, repository):
     file_service = FileService()
-    capacity_service = CapacityService()
 
     return PipelineService(
         file_service=file_service,
-        capacity_service=capacity_service,
         repository=repository,
         aircraft_path=settings.AIRCRAFT_FILE,
         events_dir=settings.FLIGHT_EVENTS_DIR,

@@ -97,3 +97,41 @@ class TestDailySummaryEndpoint:
             params={"origin": "MEM", "destination": "HNL", "date": "not-a-date"},
         )
         assert response.status_code == 422
+
+    @pytest.mark.anyio
+    async def test_daily_summary_aggregates_multiple_flights(self, client, repository):
+        # Given: A second flight on the same route and day
+        from src.domains.capacity import Capacity
+
+        # We manually insert a capacity record directly (bypassing raw event pipeline for speed)
+        # The first flight (Vol 74.78) is already there from pipeline.run() fixture
+        extra_capacity = Capacity(
+            flight_id="999",
+            flight_number="TEST999",
+            date="2022-10-03",
+            origin_iata="MEM",
+            destination_iata="HNL",
+            equipment="B789",
+            volume_m3=100.0,
+            payload_kg=50000.0,
+            operator="FDX",
+        )
+        repository.bulk_insert_capacity([extra_capacity])
+
+        # When
+        response = await client.get(
+            "/api/v1/capacity/summary",
+            params={"origin": "MEM", "destination": "HNL"},
+        )
+
+        # Then
+        assert response.status_code == 200
+        data = response.json()
+        assert data["count"] == 1
+        summary = data["summaries"][0]
+
+        # Should sum existing (74.78) + new (100.0)
+        assert summary["total_flights"] == 2
+        assert summary["total_volume_m3"] == 174.78
+        assert summary["total_payload_kg"] > 50000.0
+
