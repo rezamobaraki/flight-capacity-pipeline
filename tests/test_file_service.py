@@ -86,14 +86,16 @@ class TestLoadAircraft:
 
 
 class TestStreamEvents:
-    def test_streams_all_events(self, settings):
+    def test_streams_from_file(self, settings):
         service = FileService()
-        events = list(service.stream_events(settings.FLIGHT_EVENTS_DIR))
+        file_path = settings.FLIGHT_EVENTS_DIR / "2022-10-03.csv"
+        events = list(service.stream_events_from_file(file_path))
         assert len(events) == 6
 
     def test_parses_fields_correctly(self, settings):
         service = FileService()
-        events = list(service.stream_events(settings.FLIGHT_EVENTS_DIR))
+        file_path = settings.FLIGHT_EVENTS_DIR / "2022-10-03.csv"
+        events = list(service.stream_events_from_file(file_path))
         first = events[0]
         assert first.flight_id == "100001"
         assert first.altitude == 37850
@@ -101,18 +103,46 @@ class TestStreamEvents:
 
     def test_handles_empty_fields(self, settings):
         service = FileService()
-        events = list(service.stream_events(settings.FLIGHT_EVENTS_DIR))
+        file_path = settings.FLIGHT_EVENTS_DIR / "2022-10-03.csv"
+        events = list(service.stream_events_from_file(file_path))
         no_equip = [e for e in events if e.flight_id == "100003"]
         assert len(no_equip) == 1
         assert no_equip[0].equipment == ""
 
-    def test_raises_on_missing_dir(self, tmp_path):
-        service = FileService()
-        with pytest.raises(DataFileNotFoundError):
-            list(service.stream_events(tmp_path / "nonexistent"))
-
     def test_is_lazy(self, settings):
         service = FileService()
-        gen = service.stream_events(settings.FLIGHT_EVENTS_DIR)
+        file_path = settings.FLIGHT_EVENTS_DIR / "2022-10-03.csv"
+        gen = service.stream_events_from_file(file_path)
         first = next(gen)
         assert first.flight_id == "100001"
+
+
+class TestCopyToProcessed:
+    def test_copies_file_successfully(self, tmp_path):
+        service = FileService()
+        source_dir = tmp_path / "source"
+        processed_dir = tmp_path / "processed"
+        source_dir.mkdir()
+
+        file_path = source_dir / "test.csv"
+        file_path.write_text("content")
+
+        service.copy_to_processed(file_path, processed_dir)
+
+        assert file_path.exists()
+        assert (processed_dir / "test.csv").exists()
+        assert (processed_dir / "test.csv").read_text() == "content"
+
+    def test_creates_processed_dir_if_missing(self, tmp_path):
+        service = FileService()
+        source_dir = tmp_path / "source"
+        processed_dir = tmp_path / "processed"  # Not created yet
+        source_dir.mkdir()
+
+        file_path = source_dir / "test.csv"
+        file_path.write_text("content")
+
+        service.copy_to_processed(file_path, processed_dir)
+
+        assert processed_dir.exists()
+        assert (processed_dir / "test.csv").exists()

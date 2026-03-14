@@ -1,6 +1,7 @@
 import csv
 import json
 import logging
+import shutil
 from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
@@ -89,18 +90,18 @@ class FileService:
         logger.info("Aircraft loading complete: %d loaded, %d skipped", loaded, skipped)
         return aircraft
 
-    def stream_events(self, data_dir: str | Path) -> Iterator[FlightEvent]:
-        csv_files = self.list_files(data_dir, "*.csv")
-        for csv_file in csv_files:
-            loaded = 0
-            skipped = 0
-            for row in self.read_csv(csv_file):
-                try:
-                    yield FlightEvent.model_validate(row)
-                    loaded += 1
-                except ValidationError as e:
-                    skipped += 1
-                    logger.warning("Skipped invalid event in %s: %s", csv_file.name, e)
-            logger.info(
-                "%s: %d events loaded, %d skipped", csv_file.name, loaded, skipped
-            )
+    def stream_events_from_file(self, csv_file: Path) -> Iterator[FlightEvent]:
+        for row in self.read_csv(csv_file):
+            try:
+                yield FlightEvent.model_validate(row)
+            except ValidationError as e:
+                logger.warning("Skipped invalid event row in %s: %s", csv_file.name, e)
+
+    def copy_to_processed(self, file_path: Path, processed_dir: Path) -> None:
+        processed_dir.mkdir(parents=True, exist_ok=True)
+        destination = processed_dir / file_path.name
+        try:
+            shutil.copy2(str(file_path), str(destination))
+            logger.info("Copied processed file %s to %s", file_path.name, processed_dir)
+        except Exception as e:
+            logger.error("Failed to copy file %s: %s", file_path, e)

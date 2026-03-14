@@ -58,6 +58,8 @@ def tmp_data_dir():
         csv_file = events_dir / "2022-10-03.csv"
         csv_file.write_text(SAMPLE_EVENTS_CSV.strip())
 
+        (base / "processed").mkdir()
+
         yield base
 
 
@@ -65,7 +67,9 @@ def tmp_data_dir():
 def settings(tmp_data_dir):
     s = Settings()
     s.DATA_DIR = tmp_data_dir
+    s.RAW_DIR = tmp_data_dir
     s.FLIGHT_EVENTS_DIR = tmp_data_dir / "flight_events"
+    s.PROCESSED_DIR = tmp_data_dir / "processed"
     s.AIRCRAFT_FILE = tmp_data_dir / "airplane_details_original.json"
     s.DATABASE_PATH = tmp_data_dir / "rotate_test.db"
     return s
@@ -88,6 +92,7 @@ def pipeline(settings, repository):
         repository=repository,
         aircraft_path=settings.AIRCRAFT_FILE,
         events_dir=settings.FLIGHT_EVENTS_DIR,
+        processed_dir=settings.PROCESSED_DIR,
     )
 
 

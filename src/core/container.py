@@ -17,6 +17,7 @@ class ContainerRegistry:
             repository=self.repository,
             aircraft_path=self.settings.AIRCRAFT_FILE,
             events_dir=self.settings.FLIGHT_EVENTS_DIR,
+            processed_dir=self.settings.PROCESSED_DIR,
         )
 
 
