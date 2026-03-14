@@ -5,7 +5,7 @@ from fastapi import FastAPI
 
 from src.core.container import container
 from src.core.exception_handlers import setup_exception_handlers
-from src.handlers import capacity, commands, health
+from handlers.http import capacity, health, triggers
 
 
 def create_app() -> FastAPI:
@@ -14,7 +14,7 @@ def create_app() -> FastAPI:
     app = FastAPI(title="Rotate Cargo Capacity API", version="0.1.0")
     app.include_router(health.router)
     app.include_router(capacity.router)
-    app.include_router(commands.router)
+    app.include_router(triggers.router)
 
     setup_exception_handlers(app)
 

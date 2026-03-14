@@ -3,7 +3,7 @@ from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 
 from src.core import container as container_module  # Renamed for clarity within test if needed
-from src.handlers import capacity, health
+from handlers.http import capacity, health
 
 
 @pytest.fixture

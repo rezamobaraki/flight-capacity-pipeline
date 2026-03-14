@@ -1,10 +1,10 @@
-.PHONY: install test lint run clean pipeline
+.PHONY: install test lint run clean ingest
 
 install:
 	uv sync --all-extras
 
-pipeline:
-	uv run python -m src.main
+ingest:
+	uv run python -m src.cli ingest
 
 test:
 	uv run pytest tests/ -v --tb=short
@@ -21,10 +21,11 @@ format:
 	uv run ruff format src/ tests/
 
 run:
-	uv run uvicorn src.app:create_app --factory --reload --port 8000
+	uv run uvicorn src.main:create_app --factory --reload --port 8000
 
 clean:
-	find . -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
-	find . -type d -name .pytest_cache -exec rm -rf {} + 2>/dev/null || true
-	rm -f data/rotate.db
-
+	find . -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
+	find . -type d -name ".pytest_cache" -exec rm -rf {} + 2>/dev/null || true
+	rm -f data/warehouse/*.db
+	rm -f data/processed/*
+	rm -f data/warehouse/*.csv
