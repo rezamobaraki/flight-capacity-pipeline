@@ -1,7 +1,6 @@
 import logging
 from collections import defaultdict
 from collections.abc import Iterator
-from typing import Optional
 
 from src.domains.flight import Flight
 from src.domains.flight_event import FlightEvent
@@ -34,7 +33,7 @@ class FlightAggregatorService:
         )
         return flights
 
-    def _build_flight(self, flight_id: str, events: list[FlightEvent]) -> Optional[Flight]:
+    def _build_flight(self, flight_id: str, events: list[FlightEvent]) -> Flight | None:
         equipment = self._first_nonempty(e.equipment for e in events)
         if not equipment:
             logger.debug("Flight %s has no equipment, skipping", flight_id)

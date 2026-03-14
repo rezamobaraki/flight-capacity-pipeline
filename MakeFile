@@ -21,7 +21,7 @@ format:
 	uv run ruff format src/ tests/
 
 run:
-	uv run uvicorn src.core:create_app --factory --reload --port 8000
+	uv run uvicorn src.app:create_app --factory --reload --port 8000
 
 clean:
 	find . -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true

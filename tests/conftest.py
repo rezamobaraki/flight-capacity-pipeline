@@ -5,9 +5,13 @@ from pathlib import Path
 import pytest
 
 from src.core.settings import Settings
-from src.core.app_container import AppContainer
 from src.domains.aircraft import Aircraft
-from src.domains.flight import Flight
+from src.repositories.sqlite_repository import SQLiteRepository  # Keep for fallback comparison if needed, but tests should use container default or DuckDB
+from src.repositories.duckdb_repository import DuckDBRepository
+from src.services.capacity_service import CapacityService
+from src.services.file_service import FileService
+from src.services.flight_aggregator import FlightAggregatorService
+from src.services.pipeline_service import PipelineService
 
 SAMPLE_AIRCRAFT = [
     {
@@ -69,21 +73,29 @@ def settings(tmp_data_dir):
 
 
 @pytest.fixture
-def container(settings):
-    c = AppContainer(settings)
-    c.repository.initialize()
-    yield c
-    c.repository.close()
+def repository(settings):
+    # Depending on what we want to test: generic interface or specific implementation
+    # Since we switched the app to DuckDB, let's test DuckDB
+    repo = DuckDBRepository(settings.DATABASE_PATH)
+    repo.initialize()
+    yield repo
+    repo.close()
 
 
 @pytest.fixture
-def container_with_handlers(container):
-    from src.handlers.capacity import CapacityHandler
-    from src.handlers.health import HealthHandler
-
-    container.health_handler = HealthHandler()
-    container.capacity_handler = CapacityHandler(container.repository)
-    return container
+def pipeline(settings, repository):
+    file_service = FileService()
+    aggregator = FlightAggregatorService()
+    capacity_service = CapacityService()
+    
+    return PipelineService(
+        file_service=file_service,
+        aggregator=aggregator,
+        capacity_service=capacity_service,
+        repository=repository,
+        aircraft_path=settings.AIRCRAFT_FILE,
+        events_dir=settings.FLIGHT_EVENTS_DIR,
+    )
 
 
 @pytest.fixture

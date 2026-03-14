@@ -1,7 +1,7 @@
 import pytest
 
 from src.domains.aircraft import Aircraft
-from src.errors import DataFileNotFoundError
+from src.core.exceptions import DataFileNotFoundError
 from src.services.file_service import FileService
 
 

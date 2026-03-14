@@ -3,20 +3,19 @@ import json
 import logging
 from collections.abc import Iterator
 from pathlib import Path
-from typing import Union
 
 from pydantic import ValidationError
 
 from src.domains.aircraft import Aircraft
 from src.domains.flight_event import FlightEvent
-from src.errors.file import DataFileNotFoundError
+from src.core.exceptions import DataFileNotFoundError
 
 logger = logging.getLogger(__name__)
 
 
 class FileService:
     def read_csv(
-        self, path: Union[str, Path], delimiter: str = ";"
+        self, path: str | Path, delimiter: str = ";"
     ) -> Iterator[dict[str, str]]:
         path = Path(path)
         if not path.exists():
@@ -40,7 +39,7 @@ class FileService:
                 f"Cannot decode {path}. Ensure it is UTF-8 encoded. Error: {e}"
             ) from e
 
-    def read_ndjson(self, path: Union[str, Path]) -> Iterator[dict]:
+    def read_ndjson(self, path: str | Path) -> Iterator[dict]:
         path = Path(path)
         if not path.exists():
             raise DataFileNotFoundError(str(path))
@@ -61,7 +60,7 @@ class FileService:
                     )
 
     def list_files(
-        self, directory: Union[str, Path], pattern: str = "*.csv"
+        self, directory: str | Path, pattern: str = "*.csv"
     ) -> list[Path]:
         directory = Path(directory)
         if not directory.exists():
@@ -71,7 +70,7 @@ class FileService:
             raise DataFileNotFoundError(f"No {pattern} files in {directory}")
         return files
 
-    def load_aircraft(self, path: Union[str, Path]) -> list[Aircraft]:
+    def load_aircraft(self, path: str | Path) -> list[Aircraft]:
         loaded = 0
         skipped = 0
         aircraft: list[Aircraft] = []
@@ -85,7 +84,7 @@ class FileService:
         logger.info("Aircraft loading complete: %d loaded, %d skipped", loaded, skipped)
         return aircraft
 
-    def stream_events(self, data_dir: Union[str, Path]) -> Iterator[FlightEvent]:
+    def stream_events(self, data_dir: str | Path) -> Iterator[FlightEvent]:
         csv_files = self.list_files(data_dir, "*.csv")
         for csv_file in csv_files:
             yield from self._stream_events_file(csv_file)

@@ -14,21 +14,3 @@ class CapacityResponse(BaseModel):
     payload_kg: float
     operator: str
 
-
-class DailySummaryResponse(BaseModel):
-    date: str
-    origin_iata: str
-    destination_iata: str
-    total_flights: int
-    total_volume_m3: float
-    total_payload_kg: float
-
-
-class CapacityListResponse(BaseModel):
-    count: int
-    capacities: list[CapacityResponse]
-
-
-class DailySummaryListResponse(BaseModel):
-    count: int
-    summaries: list[DailySummaryResponse]

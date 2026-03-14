@@ -1,4 +1,3 @@
-from typing import Optional, Union
 
 from pydantic import BaseModel, field_validator
 
@@ -14,8 +13,8 @@ class FlightEvent(BaseModel):
     event: str
     flight: str = ""
     flight_id: str
-    latitude: Optional[float] = None
-    longitude: Optional[float] = None
+    latitude: float | None = None
+    longitude: float | None = None
     operator: str = ""
     origin_iata: str = ""
     origin_icao: str = ""
@@ -24,14 +23,14 @@ class FlightEvent(BaseModel):
 
     @field_validator("altitude", mode="before")
     @classmethod
-    def coerce_altitude(cls, v: Union[str, int]) -> int:
+    def coerce_altitude(cls, v: str | int) -> int:
         if not v and v != 0:
             return 0
         return int(v)
 
     @field_validator("latitude", "longitude", mode="before")
     @classmethod
-    def coerce_coordinate(cls, v: Union[str, float, None]) -> Optional[float]:
+    def coerce_coordinate(cls, v: str | float | None) -> float | None:
         if not v and v != 0:
             return None
         return float(v)

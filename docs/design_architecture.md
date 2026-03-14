@@ -371,11 +371,11 @@ The `status_code` attribute lets the FastAPI error handler map any `AppError` su
 ```python
 @asynccontextmanager
 async def lifespan(app):
-    container.repository.initialize()
-    if container.repository.is_empty():
-        container.pipeline.run()     # Only runs on first start
-    yield
-    container.repository.close()
+	container.repository.initialize()
+	if container.repository.is_exists():
+		container.pipeline.run()  # Only runs on first start
+	yield
+	container.repository.close()
 ```
 
 First launch: pipeline processes all data (~15s), persists to SQLite.

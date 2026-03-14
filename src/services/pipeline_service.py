@@ -30,14 +30,14 @@ class PipelineService:
         logger.info("Starting data pipeline")
 
         aircraft_list = self._file_service.load_aircraft(self._aircraft_path)
-        self._repository.save_aircraft_batch(aircraft_list)
+        self._repository.bulk_create_aircraft(aircraft_list)
         aircraft_map = {a.code_icao: a for a in aircraft_list}
 
         events = self._file_service.stream_events(self._events_dir)
         flights = self._aggregator.aggregate(events)
-        self._repository.save_flights_batch(flights)
+        self._repository.bulk_create_flights(flights)
 
         capacities = self._capacity_service.calculate(flights, aircraft_map)
-        self._repository.save_capacity_batch(capacities)
+        self._repository.bulk_create_capacity(capacities)
 
         logger.info("Pipeline complete")
