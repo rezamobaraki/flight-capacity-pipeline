@@ -1,6 +1,5 @@
 import logging
 
-
 from fastapi import APIRouter, Depends
 
 from src.core.container import get_repository
