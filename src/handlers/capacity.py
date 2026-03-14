@@ -23,11 +23,7 @@ async def get_capacity(
     params: CapacityRequest = Depends(),
     repository: AbstractRepository = Depends(get_repository),
 ) -> CapacityListResponse:
-    capacity_iter = repository.get_all_capacities(
-        origin=params.origin,
-        destination=params.destination,
-        date=params.date,
-    )
+    capacity_iter = repository.stream_capacities(origin=params.origin, destination=params.destination, date=params.date)
     capacities = list(capacity_iter)
     return CapacityListResponse(
         count=len(capacities),
@@ -40,11 +36,8 @@ async def get_daily_summary(
     params: CapacitySummaryRequest = Depends(),
     repository: AbstractRepository = Depends(get_repository),
 ) -> DailySummaryListResponse:
-    summary_iter = repository.get_capacity_summary(
-        origin=params.origin,
-        destination=params.destination,
-        date=params.date,
-    )
+    summary_iter = repository.stream_capacity_summary(origin=params.origin, destination=params.destination,
+                                                      date=params.date)
 
     summaries = [
         DailySummaryResponse(**s.model_dump())

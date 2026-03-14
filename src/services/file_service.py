@@ -105,3 +105,23 @@ class FileService:
             logger.info("Copied processed file %s to %s", file_path.name, processed_dir)
         except Exception as e:
             logger.error("Failed to copy file %s: %s", file_path, e)
+
+    def write_csv(
+        self,
+        path: Path,
+        rows: Iterator[dict[str, Any]],
+        fieldnames: list[str],
+        delimiter: str = ",",
+    ) -> None:
+        path = Path(path)
+        path.parent.mkdir(parents=True, exist_ok=True)
+
+        try:
+            with open(path, "w", newline="", encoding="utf-8") as f:
+                writer = csv.DictWriter(f, fieldnames=fieldnames, delimiter=delimiter)
+                writer.writeheader()
+                writer.writerows(rows)
+            logger.info("Successfully wrote CSV to %s", path)
+        except Exception as e:
+            logger.error("Failed to write CSV to %s: %s", path, e)
+            raise

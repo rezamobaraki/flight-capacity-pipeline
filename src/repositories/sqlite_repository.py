@@ -87,13 +87,13 @@ class SQLiteRepository(AbstractRepository):
             cursor = conn.execute(queries.CALCULATE_CAPACITY)
             return cursor.rowcount
 
-    def get_all_flights(self) -> Iterator[Flight]:
+    def stream_flights(self) -> Iterator[Flight]:
         with self.connection as conn:
             cursor = conn.execute("SELECT * FROM flights")
             for row in cursor:
                 yield Flight.model_validate(dict(row))
 
-    def get_all_capacities(
+    def stream_capacities(
         self, origin: str | None = None, destination: str | None = None, date: str | None = None
     ) -> Iterator[Capacity]:
         query = queries.SELECT_CAPACITY_BASE
@@ -115,7 +115,7 @@ class SQLiteRepository(AbstractRepository):
         for row in cursor:
             yield Capacity.model_validate(dict(row))
 
-    def get_capacity_summary(
+    def stream_capacity_summary(
         self,
         origin: str,
         destination: str,
@@ -138,7 +138,7 @@ class SQLiteRepository(AbstractRepository):
                 **dict(row)
             )
 
-    def get_all_aircraft(self) -> Iterator[Aircraft]:
+    def stream_aircraft(self) -> Iterator[Aircraft]:
         cursor = self.connection.execute(queries.SELECT_ALL_AIRCRAFT)
         for row in cursor:
             yield Aircraft.model_validate(dict(row))

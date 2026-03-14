@@ -18,6 +18,7 @@ class ContainerRegistry:
             aircraft_path=self.settings.AIRCRAFT_FILE,
             events_dir=self.settings.FLIGHT_EVENTS_DIR,
             processed_dir=self.settings.PROCESSED_DIR,
+            capacity_output_path=self.settings.CAPACITY_OUTPUT_FILE,
         )
 
 

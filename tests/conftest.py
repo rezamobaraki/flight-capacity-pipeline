@@ -59,6 +59,7 @@ def tmp_data_dir():
         csv_file.write_text(SAMPLE_EVENTS_CSV.strip())
 
         (base / "processed").mkdir()
+        (base / "warehouse").mkdir()
 
         yield base
 
@@ -70,8 +71,10 @@ def settings(tmp_data_dir):
     s.RAW_DIR = tmp_data_dir
     s.FLIGHT_EVENTS_DIR = tmp_data_dir / "flight_events"
     s.PROCESSED_DIR = tmp_data_dir / "processed"
+    s.WAREHOUSE_DIR = tmp_data_dir / "warehouse"
     s.AIRCRAFT_FILE = tmp_data_dir / "airplane_details_original.json"
-    s.DATABASE_PATH = tmp_data_dir / "rotate_test.db"
+    s.DATABASE_PATH = s.WAREHOUSE_DIR / "rotate_test.db"
+    s.CAPACITY_OUTPUT_FILE = s.WAREHOUSE_DIR / "capacity_table.csv"
     return s
 
 
@@ -93,6 +96,7 @@ def pipeline(settings, repository):
         aircraft_path=settings.AIRCRAFT_FILE,
         events_dir=settings.FLIGHT_EVENTS_DIR,
         processed_dir=settings.PROCESSED_DIR,
+        capacity_output_path=settings.CAPACITY_OUTPUT_FILE,
     )
 
 

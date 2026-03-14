@@ -18,7 +18,7 @@ class TestSQLiteRepository:
         ]
         count = repo.bulk_insert_aircraft(aircraft)
         assert count == 1
-        amap = {a.code_icao: a for a in repo.get_all_aircraft()}
+        amap = {a.code_icao: a for a in repo.stream_aircraft()}
         assert "A388" in amap
         assert amap["A388"].full_name == "Airbus A380-800"
 
@@ -72,7 +72,7 @@ class TestSQLiteRepository:
             ),
         ]
         repo.bulk_insert_capacity(caps)
-        result = list(repo.get_all_capacities(origin="MEM"))
+        result = list(repo.stream_capacities(origin="MEM"))
         assert len(result) == 1
         assert result[0].flight_id == "1"
 
@@ -99,7 +99,7 @@ class TestSQLiteRepository:
             ),
         ]
         repo.bulk_insert_capacity(caps)
-        result = list(repo.get_all_capacities(date="2022-10-03"))
+        result = list(repo.stream_capacities(date="2022-10-03"))
         assert len(result) == 1
 
     def test_get_capacity_summary(self, repository):
@@ -132,7 +132,7 @@ class TestSQLiteRepository:
         ]
         repo.bulk_insert_capacity(caps)
 
-        result = list(repo.get_capacity_summary(origin="MEM", destination="HNL"))
+        result = list(repo.stream_capacity_summary(origin="MEM", destination="HNL"))
         assert len(result) == 2
 
         d1 = next(r for r in result if r.date == "2022-10-03")
@@ -146,9 +146,7 @@ class TestSQLiteRepository:
         assert d2.total_payload_kg == 300.0
 
         result_date = list(
-            repo.get_capacity_summary(
-                origin="MEM", destination="HNL", date="2022-10-03"
-            )
+            repo.stream_capacity_summary(origin="MEM", destination="HNL", date="2022-10-03")
         )
         assert len(result_date) == 1
         assert result_date[0].date == "2022-10-03"

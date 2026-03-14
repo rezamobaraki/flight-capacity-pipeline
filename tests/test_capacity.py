@@ -26,7 +26,7 @@ class TestCapacityRepository:
         count = repository.calculate_capacity()
 
         assert count == 2
-        capacities = list(repository.get_all_capacities())
+        capacities = list(repository.stream_capacities())
         assert len(capacities) == 2
 
         capacities.sort(key=lambda x: x.flight_id)
@@ -57,7 +57,7 @@ class TestCapacityRepository:
         count = repository.calculate_capacity()
 
         assert count == 0
-        capacities = list(repository.get_all_capacities())
+        capacities = list(repository.stream_capacities())
         assert len(capacities) == 0
 
     def test_calculate_preserves_flight_data(self, repository, sample_aircraft):
@@ -77,7 +77,7 @@ class TestCapacityRepository:
 
         repository.calculate_capacity()
 
-        capacities = list(repository.get_all_capacities())
+        capacities = list(repository.stream_capacities())
         assert len(capacities) == 1
         c = capacities[0]
 
@@ -111,7 +111,7 @@ class TestCapacityRepository:
 
         count = repository.calculate_capacity()
 
-        capacities = list(repository.get_all_capacities())
+        capacities = list(repository.stream_capacities())
         assert len(capacities) == 1
         assert capacities[0].equipment == "A388"
         assert capacities[0].volume_m3 == 86.74

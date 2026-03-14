@@ -24,23 +24,23 @@ class RepositoryProtocol(Protocol):
 
     def calculate_capacity(self) -> int: ...
 
-    def get_all_flights(self) -> Iterator[Flight]: ...
+    def stream_flights(self) -> Iterator[Flight]: ...
 
-    def get_all_capacities(
+    def stream_capacities(
         self,
         origin: str | None = None,
         destination: str | None = None,
         date: str | None = None,
     ) -> Iterator[Capacity]: ...
 
-    def get_capacity_summary(
+    def stream_capacity_summary(
         self,
         origin: str,
         destination: str,
         date: str | None = None
     ) -> Iterator[CapacitySummary]: ...
 
-    def get_all_aircraft(self) -> Iterator[Aircraft]: ...
+    def stream_aircraft(self) -> Iterator[Aircraft]: ...
 
     def close(self) -> None: ...
 
