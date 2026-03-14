@@ -4,7 +4,6 @@ import pytest
 
 class TestCapacityRepository:
     def test_calculate_matches_flights_to_aircraft(self, repository, sample_aircraft):
-        # Given
         repository.bulk_insert_aircraft(sample_aircraft)
         flights = [
             Flight(
@@ -24,53 +23,44 @@ class TestCapacityRepository:
         ]
         repository.bulk_insert_flights(flights)
 
-        # When
         count = repository.calculate_capacity()
 
-        # Then
         assert count == 2
         capacities = list(repository.get_all_capacities())
         assert len(capacities) == 2
 
-        # Sort by flight_id to ensure order
         capacities.sort(key=lambda x: x.flight_id)
 
-        # B789 Flight
         c1 = next(c for c in capacities if c.equipment == "B789")
         assert c1.volume_m3 == 74.78
         assert c1.payload_kg == 40610.85
         assert c1.aircraft_name == "Boeing 787-9"
 
-        # A388 Flight
         c2 = next(c for c in capacities if c.equipment == "A388")
         assert c2.volume_m3 == 86.74
         assert c2.payload_kg == 83417.60
         assert c2.aircraft_name == "Airbus A380-800"
 
     def test_calculate_skips_unmatched_equipment(self, repository, sample_aircraft):
-        # Given
         repository.bulk_insert_aircraft(sample_aircraft)
         flights = [
             Flight(
                 flight_id="1",
                 date="2022-10-03",
-                equipment="ZZZZ",  # Unknown equipment
+                equipment="ZZZZ",
                 origin_iata="AAA",
                 destination_iata="BBB",
             ),
         ]
         repository.bulk_insert_flights(flights)
 
-        # When
         count = repository.calculate_capacity()
 
-        # Then
         assert count == 0
         capacities = list(repository.get_all_capacities())
         assert len(capacities) == 0
 
     def test_calculate_preserves_flight_data(self, repository, sample_aircraft):
-        # Given
         repository.bulk_insert_aircraft(sample_aircraft)
         flights = [
             Flight(
@@ -85,10 +75,8 @@ class TestCapacityRepository:
         ]
         repository.bulk_insert_flights(flights)
 
-        # When
         repository.calculate_capacity()
 
-        # Then
         capacities = list(repository.get_all_capacities())
         assert len(capacities) == 1
         c = capacities[0]
@@ -99,7 +87,6 @@ class TestCapacityRepository:
         assert c.category == "B787"
 
     def test_calculate_updates_existing_records(self, repository, sample_aircraft):
-        # Given initial calculation
         repository.bulk_insert_aircraft(sample_aircraft)
         flights = [
             Flight(
@@ -113,8 +100,6 @@ class TestCapacityRepository:
         repository.bulk_insert_flights(flights)
         repository.calculate_capacity()
 
-        # When: Flight equipment changes (e.g. re-aggregated or updated)
-        # Note: Since flight_id is PK, inserting again replaces it.
         updated_flight = Flight(
             flight_id="1",
             date="2022-10-03",
@@ -124,10 +109,8 @@ class TestCapacityRepository:
         )
         repository.bulk_insert_flights([updated_flight])
 
-        # When: We recalculate
         count = repository.calculate_capacity()
 
-        # Then
         capacities = list(repository.get_all_capacities())
         assert len(capacities) == 1
         assert capacities[0].equipment == "A388"

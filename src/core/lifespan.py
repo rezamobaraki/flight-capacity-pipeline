@@ -11,9 +11,6 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """
-    Handle application lifespan events (startup and shutdown).
-    """
     logger.info("Initializing application resources...")
     container.repository.initialize()
 

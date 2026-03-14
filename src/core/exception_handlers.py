@@ -6,9 +6,6 @@ from src.schemas.responses import ErrorResponse
 
 
 def setup_exception_handlers(app: FastAPI) -> None:
-    """
-    Register exception handlers for the application.
-    """
 
     @app.exception_handler(AppError)
     async def handle_app_error(request: Request, exc: AppError):
@@ -17,4 +14,3 @@ def setup_exception_handlers(app: FastAPI) -> None:
             status_code=exc.status_code,
             content=content.model_dump(),
         )
-

@@ -2,7 +2,6 @@ from pydantic import BaseModel, Field, field_validator
 
 
 class CapacitySummaryRequest(BaseModel):
-    """Query parameters for capacity summary aggregation."""
     origin: str = Field(
         ..., 
         min_length=3, 
