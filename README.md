@@ -48,7 +48,7 @@ A data engineering pipeline and API that calculates available cargo capacity (pa
 
 ### 🐳 Docker Usage
 
-You can run the entire stack without installing Python locally.
+The project is fully containerized as **Flight Capacity Pipeline**. You can run the entire stack without installing Python locally.
 
 1.  **Build Images**:
     ```bash
@@ -86,5 +86,3 @@ You can run the entire stack without installing Python locally.
 
 For detailed design decisions, architecture diagrams, and cloud scaling proposals, please refer to:
 - [Design & Architecture](docs/design_architecture.md)
-
-
