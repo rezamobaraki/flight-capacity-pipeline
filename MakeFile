@@ -1,4 +1,4 @@
-.PHONY: install test lint run clean ingest
+.PHONY: install test lint run clean ingest docker-build docker-up docker-ingest docker-test
 
 install:
 	uv sync --all-extras
@@ -29,3 +29,15 @@ clean:
 	rm -f data/warehouse/*.db
 	rm -f data/processed/*
 	rm -f data/warehouse/*.csv
+
+docker-build:
+	docker compose build
+
+docker-up:
+	docker compose up api
+
+docker-ingest:
+	docker compose run --rm ingest
+
+docker-test:
+	docker compose run --rm test

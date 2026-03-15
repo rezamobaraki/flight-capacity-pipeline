@@ -46,44 +46,60 @@
 
 | ID | Requirement | Decision |
 |----|-------------|----------|
-| NFR-1 | Process 700K rows in reasonable time (<30s pipeline, <100ms queries) | Streaming loaders → SQLite with indexes |
+| NFR-1 | Process 700K rows in reasonable time (<30s pipeline, <100ms queries) | Streaming loaders → ELT approach (SQLite aggregation) |
 | NFR-2 | Simple, readable, no over-engineering | Pure Python + Pydantic + stdlib `csv` + `sqlite3` |
-| NFR-3 | Testable at every layer independently | Layered architecture with dependency injection |
-| NFR-4 | Minimal external dependencies | Only `fastapi`, `uvicorn`, `pydantic`, `httpx`(dev) |
+| NFR-3 | Testable at every layer independently | Dependency Injection via Container |
+| NFR-4 | Minimal external dependencies | Only `fastapi`, `uvicorn`, `pydantic` |
 
 ---
 
 ## 2. Core Entities
 
-Four Pydantic domain models represent the data at each stage of the pipeline:
+Pydantic domain models represent the data at each stage of the pipeline.
 
+```mermaid
+classDiagram
+    direction LR
+    
+    class FlightEvent {
+        +String flight_id
+        +String event
+        +String equipment
+        +String origin_iata
+        +String destination_iata
+        +DateTime time
+    }
+
+    class Aircraft {
+        +String code_icao
+        +String full_name
+        +Float payload
+        +Float volume
+    }
+
+    class Flight {
+        +String flight_id
+        +String flight_number
+        +String equipment
+        +String origin_iata
+        +String destination_iata
+    }
+
+    class Capacity {
+        +String flight_id
+        +Float payload_kg
+        +Float volume_m3
+    }
+
+    FlightEvent --|> Flight : "Aggregated (SQL)"
+    Flight --> Capacity : "Joined"
+    Aircraft ..> Capacity : "Provides Specs"
 ```
-FlightEvent          Aircraft            Flight              Capacity
-─────────────       ─────────────       ──────────────      ──────────────
-address              code_iata           flight_id           flight_id
-altitude             code_icao ←──┐     flight_number       flight_number
-callsign             full_name    │     date                date
-date                 category     │     origin_iata         origin_iata
-destination_iata     avg_speed    │     origin_icao         origin_icao
-destination_icao     volume ──────┼──→  destination_iata    destination_iata
-equipment ───────────payload ─────┘     destination_icao    destination_icao
-event                                   equipment           equipment
-flight                                  operator            aircraft_name
-flight_id                               registration        category
-latitude                                                    volume_m3  ← from Aircraft
-longitude                                                   payload_kg ← from Aircraft
-operator                                                    operator
-origin_iata
-origin_icao
-registration
-time
-```
 
-### Why Pydantic for domains (not dataclasses)?
+### Why Pydantic?
 
-- **Validation on parse** — CSV rows are raw strings; `field_validator` coerces altitude `str→int`, coordinates `str→float`, empty strings → defaults
-- **Schema consistency** — same model validates input AND serializes to API responses
-- **One model per stage** — `FlightEvent` (raw) → `Flight` (deduplicated) → `Capacity` (joined)
+- **Validation on parse** — CSV rows are raw strings; `field_validator` coerces types and handles defaults.
+- **Schema consistency** — same model validates input AND serializes to API responses.
 
 ---
 
@@ -91,92 +107,64 @@ time
 
 ### CLI Entry Point
 
+```bash
+# Initialize DB, run pipeline (extract -> load -> transform), and export results
+python src/cli.py pipeline
 ```
-python -m src.main
-```
-Runs the full pipeline: load → aggregate → calculate → persist to SQLite.
 
 ### REST API (FastAPI)
 
-```
-uvicorn src.handlers:create_app --factory --port 8000
+```bash
+uvicorn src.handlers.http.app:create_app --factory --port 8000
 ```
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | `GET` | `/health` | Health check |
 | `GET` | `/api/v1/capacity?origin=X&destination=Y&date=Z` | Per-flight capacity list, all filters optional |
-| `GET` | `/api/v1/capacity/summary?origin=X&destination=Y` | Daily aggregated summary for a route (Q3 answer) |
-
-### Response Schemas
-
-```
-CapacityListResponse          DailySummaryListResponse
-├── count: int                ├── count: int
-└── capacities: [             └── summaries: [
-      CapacityResponse              DailySummaryResponse
-      ├── flight_id                 ├── date
-      ├── flight_number             ├── origin_iata
-      ├── date                      ├── destination_iata
-      ├── origin_iata               ├── total_flights
-      ├── destination_iata          ├── total_volume_m3
-      ├── equipment                 └── total_payload_kg
-      ├── aircraft_name          ]
-      ├── volume_m3
-      ├── payload_kg
-      └── operator
-    ]
-```
+| `GET` | `/api/v1/capacity/summary?origin=X&destination=Y` | Daily aggregated summary for a route |
 
 ---
 
 ## 4. Data Flow
 
-```
-                          ┌─────────────────────────────────────┐
-                          │           DATA SOURCES               │
-                          │                                     │
-                          │  flight_events/*.csv   aircraft.json │
-                          └─────────┬───────────────────┬───────┘
-                                    │                   │
-                              ┌─────▼─────┐       ┌────▼────────┐
-                              │EventLoader│       │AircraftLoader│
-                              │ (stream)  │       │  (stream)   │
-                              └─────┬─────┘       └────┬────────┘
-                                    │                   │
-                             Iterator[FlightEvent]   list[Aircraft]
-                                    │                   │
-                              ┌─────▼──────────┐        │
-                              │FlightAggregator│        │
-                              │  (deduplicate) │        │
-                              └─────┬──────────┘        │
-                                    │                   │
-                              list[Flight]              │
-                                    │                   │
-                              ┌─────▼───────────────────▼──┐
-                              │     CapacityService         │
-                              │  (join flight + aircraft)   │
-                              └─────┬──────────────────────┘
-                                    │
-                              list[Capacity]
-                                    │
-                              ┌─────▼──────────┐
-                              │SQLiteRepository│
-                              │   (persist)    │
-                              └─────┬──────────┘
-                                    │
-                              ┌─────▼──────────┐
-                              │  FastAPI API    │
-                              │  (query + serve)│
-                              └────────────────┘
-```
+The pipeline follows an **ELT (Extract, Load, Transform)** approach to handle data efficiently without excessive memory usage.
 
-### Key Design: Streaming Loaders → Batch Services
+1.  **Extract**: `FileService` streams raw CSV/JSON files.
+2.  **Load**: `PipelineService` bulk inserts raw rows into SQLite staging tables.
+3.  **Transform**: SQL queries aggregate events into flights and calculate capacity.
+4.  **Serve**: Data is exposed via REST API or exported to CSV.
 
-- **EventLoader.stream()** yields `FlightEvent` one at a time (generator) — never loads all 700K rows into memory at once
-- **FlightAggregator.aggregate()** collects events into a `dict[flight_id → list[events]]` — this is the materialization point, unavoidable for dedup
-- **CapacityService.calculate()** iterates flights once, looks up aircraft via `dict[code_icao → Aircraft]` — O(1) per flight
-- **SQLiteRepository** persists results — so queries are instant after pipeline completes
+```mermaid
+graph LR
+    subgraph Sources
+        F[Events CSVs]
+        A[Aircraft JSON]
+    end
+
+    subgraph "Python Layer"
+        FS[FileService]
+        PS[PipelineService]
+    end
+
+    subgraph "Database Layer (ELT)"
+        R[(Raw Events)]
+        T[SQL Aggregation]
+        C[Capacity Table]
+    end
+
+    subgraph Outputs
+        API[FastAPI]
+        CLI[CSV Export]
+    end
+
+    F & A --> FS
+    FS --> PS
+    PS -- "Bulk Insert" --> R
+    R -- "Group By" --> T
+    T -- "Join" --> C
+    C --> API & CLI
+```
 
 ---
 
@@ -187,235 +175,208 @@ CapacityListResponse          DailySummaryListResponse
 ```
 rotate/
 ├── src/
-│   ├── core/                          # Configuration & wiring
-│   │   ├── settings.py                #   Paths, log config
-│   │   └── app_container.py           #   Dependency injection (manual)
-│   │
+│   ├── core/                          # Configuration & wiring (DI Container)
 │   ├── domains/                       # Pydantic domain models
-│   │   ├── flight_event.py            #   Raw CSV row (with field validators)
-│   │   ├── aircraft.py                #   Aircraft specs (JSONL row)
-│   │   ├── flight.py                  #   Deduplicated flight (1 per flight_id)
-│   │   └── capacity.py                #   Final output (flight + aircraft joined)
-│   │
-│   ├── errors/                        # Exception hierarchy
-│   │   ├── app.py                     #   AppError base (with status_code)
-│   │   ├── database.py                #   DatabaseNotInitializedError
-│   │   ├── domain.py                  #   DomainError base
-│   │   └── file.py                    #   DataFileNotFoundError, NoFlightDataError
-│   │
-│   ├── services/                      # Business logic (pure Python)
-│   │   ├── event_loader.py            #   CSV → Iterator[FlightEvent] (streaming)
-│   │   ├── aircraft_loader.py         #   JSONL → Iterator[Aircraft] (streaming)
-│   │   ├── flight_aggregator.py       #   Events → deduplicated Flights
-│   │   ├── capacity_service.py        #   Flights + Aircraft → Capacity list
-│   │   └── pipeline_service.py        #   Orchestrates: load → aggregate → calculate → save
-│   │
+│   ├── services/                      # Business logic
+│   │   ├── file_service.py            #   Raw file I/O (CSV/JSON parsers)
+│   │   └── pipeline_service.py        #   Orchestrator: Extract -> Load -> Transform
 │   ├── repositories/                  # Data persistence
-│   │   ├── interfaces/                #   AbstractRepository (contract)
-│   │   └── sqlite_repository.py       #   SQLite implementation
-│   │
-│   ├── schemas/                       # API serialization (Pydantic)
-│   │   ├── requests/                  #   (reserved for future POST endpoints)
-│   │   └── responses/                 #   CapacityResponse, DailySummaryResponse, etc.
-│   │
-│   ├── handlers/                      # FastAPI delivery layer
-│   │   ├── __init__.py                #   create_app(), lifespan, error handler
-│   │   ├── health.py                  #   GET /health
-│   │   └── capacity.py                #   GET /api/v1/capacity, /capacity/summary
-│   │
-│   └── main.py                        # CLI entry: runs pipeline then exits
-│
-├── tests/                             # pytest suite
-│   ├── conftest.py                    #   Fixtures: tmp data, container, sample objects
-│   ├── test_loaders.py                #   EventLoader + AircraftLoader
-│   ├── test_aggregator.py             #   FlightAggregatorService
-│   ├── test_capacity.py               #   CapacityService
-│   ├── test_repository.py             #   SQLiteRepository
-│   └── test_api.py                    #   FastAPI endpoints (async)
-│
-└── data/
-    ├── flight_events/*.csv            # 7 daily CSV files (input)
-    ├── airplane_details_original.json # Aircraft specs (input)
-    └── rotate.db                      # SQLite database (output, gitignored)
+│   │   ├── queries.py                 #   SQL scripts (Transformation logic)
+│   │   └── sqlite_repository.py       #   DB operations
+│   ├── handlers/                      # Interface layer
+│   │   ├── cli/                       #   Command Line Interface
+│   │   └── http/                      #   FastAPI endpoints
 ```
 
 ### Layer Responsibilities
 
-| Layer | Knows About | Depends On | Never Touches |
-|-------|-------------|------------|---------------|
-| **domains/** | Only itself (data shape) | `pydantic` | DB, files, HTTP |
-| **errors/** | Only itself (exception hierarchy) | Python `Exception` | Anything else |
-| **services/** | Domains, errors | `csv`, `json`, domain models | DB, HTTP |
-| **repositories/** | Domains, errors | `sqlite3`, domain models | File parsing, HTTP |
-| **handlers/** | Schemas, repositories | `fastapi`, repository interface | File parsing, services |
-| **core/** | Everything (wiring) | All layers | Business logic |
-
-### Why Services (not Use Cases)?
-
-The project has 4 operations total. A use-case pattern (1 class per operation) would create 4 files with 4 classes each containing a single `execute()` method — indirection for no gain. Services group related operations into cohesive units:
-
-- `EventLoader` — one responsibility: parse CSV files
-- `AircraftLoader` — one responsibility: parse JSONL file
-- `FlightAggregator` — one responsibility: deduplicate events into flights
-- `CapacityService` — one responsibility: join flights with aircraft
-- `PipelineService` — orchestrate the above in sequence
+| Layer | Responsibility | Key Components |
+|-------|----------------|----------------|
+| **Core** | Wiring, config, logging setup | `ContainerRegistry`, `Settings` |
+| **Services** | Orchestration, File I/O, no DB logic | `PipelineService`, `FileService` |
+| **Repositories** | DB interaction, SQL execution | `SQLiteRepository`, `queries.py` |
+| **Domains** | Data shape definition & validation | `Flight`, `Capacity`, `Aircraft` |
+| **Handlers** | Entry points (Web/CLI) | `cli.py`, `http/routes.py` |
 
 ---
 
 ## 6. Deep Dive / Low-level Design (Satisfies Non-Functional Requirements)
 
-### 6.1 Streaming Loaders (NFR-1: Performance)
+### 6.1 ELT Pattern (NFR-1: Performance)
 
-**Problem:** 700K rows × Pydantic validation = potentially slow if loaded all at once.
+**Problem:** Aggregating 700K rows in Python requires loading all objects into memory or complex state management, which is slow and memory-intensive.
 
-**Solution:** Both loaders use Python generators:
+**Solution:** Delegate transformation to the database engine.
+1.  **Extract:** `FileService` streams lines from CSVs using generators (memory efficient).
+2.  **Load:** `SQLiteRepository` uses `executemany` for bulk insertion into a staging table (`raw_flight_events`).
+3.  **Transform:** A single SQL query aggregates events into flights using `GROUP BY flight_id` and `MAX()` strategies to Pick non-empty values.
 
-```python
-# event_loader.py — yields one FlightEvent at a time
-def stream(self) -> Iterator[FlightEvent]:
-    for csv_file in sorted(self._data_dir.glob("*.csv")):
-        with open(csv_file) as f:
-            reader = csv.DictReader(f, delimiter=";")
-            for row in reader:
-                yield FlightEvent.model_validate(row)
-```
+**Trade-off:**
+*   *Pros:* Very fast (SQLite is C-optimized), drastically simpler Python code.
+*   *Cons:* Logic moves to SQL (harder to unit test than pure Python functions).
 
-**Effect:** At any point, only one CSV file's file handle is open, and only one row is in memory. The downstream `FlightAggregator` materializes into a dict (unavoidable for grouping), but the I/O is lazy.
+### 6.2 Data deduplication strategy (FR-2)
 
-### 6.2 Flight Deduplication Strategy (FR-2)
-
-**Problem:** A flight_id has 2–6 event rows. We need exactly one row per flight.
-
-**Solution:** `FlightAggregator` groups events by `flight_id`, then consolidates fields using **first-non-empty** strategy:
-
-```python
-def _build_flight(self, flight_id, events):
-    # Some events have origin_iata, others don't.
-    # Take the first non-empty value across all events for each field.
-    return Flight(
-        origin_iata=self._first_nonempty(e.origin_iata for e in events),
-        ...
-    )
-```
-
-Flights with **no equipment code** are skipped entirely — they cannot contribute to capacity calculation.
-
-### 6.3 SQLite as Persistence Layer (NFR-1: Query Speed)
-
-**Why SQLite instead of in-memory only?**
-
-| Concern | Decision |
-|---------|----------|
-| Pipeline runs once (~15s), queries should be instant | SQLite persists results; API reads from DB with no re-processing |
-| Route + date filtering on 106K capacity records | Indexes on `(origin_iata, destination_iata)` and `(date)` |
-| API restarts shouldn't re-process 700K events | `is_empty()` check at startup — skip pipeline if data exists |
-| No extra dependencies | `sqlite3` is Python stdlib |
-
-**Schema design:**
-
+**SQL Logic in `queries.py`:**
 ```sql
--- Three tables mirror the three pipeline stages
-aircraft   (code_icao PK)           -- 100 rows, lookup table
-flights    (flight_id PK)           -- 198K rows, deduplicated
-capacity   (flight_id PK, FK→flights, FK→aircraft)  -- 106K rows, joined
-
--- Indexes for API query patterns
-idx_capacity_route  ON capacity(origin_iata, destination_iata)
-idx_capacity_date   ON capacity(date)
-```
-
-### 6.4 Dependency Injection via AppContainer (NFR-3: Testability)
-
-**No DI framework.** A simple `AppContainer` class wires everything:
-
-```python
-class AppContainer:
-    def __init__(self, settings=None):
-        self.settings = settings or Settings()
-        self.repository = SQLiteRepository(self.settings.DATABASE_PATH)
-        self.aircraft_loader = AircraftLoader(self.settings.AIRCRAFT_FILE)
-        self.event_loader = EventLoader(self.settings.FLIGHT_EVENTS_DIR)
-        self.aggregator = FlightAggregatorService()
-        self.capacity_service = CapacityService()
-        self.pipeline = PipelineService(...)
-```
-
-Tests inject a custom `Settings` pointing to temp directories:
-
-```python
-@pytest.fixture
-def settings(tmp_data_dir):
-    s = Settings()
-    s.DATABASE_PATH = tmp_data_dir / "test.db"  # isolated test DB
+INSERT INTO flights (...)
+SELECT
+    flight_id,
+    MAX(flight_number),
+    MAX(date),
+    MAX(origin_iata),
     ...
+FROM raw_flight_events
+GROUP BY flight_id
+HAVING flight_id IS NOT NULL;
 ```
+This handles the "multiple events per flight" by collapsing them into one record, taking the most complete data available.
 
-### 6.5 Error Hierarchy (NFR-2: Simplicity)
+### 6.3 Edge Cases & Error Handling
 
-```
-Exception
-└── AppError (status_code=500)
-    ├── NotFoundError (404)
-    │   ├── DataFileNotFoundError
-    │   └── AircraftNotFoundError
-    ├── AppValidationError (422)
-    │   └── NoFlightDataError
-    └── DatabaseError (500)
-        └── DatabaseNotInitializedError
-```
-
-The `status_code` attribute lets the FastAPI error handler map any `AppError` subclass to the correct HTTP response without if/elif chains.
-
-### 6.6 API Startup Lifecycle (NFR-1)
-
-```python
-@asynccontextmanager
-async def lifespan(app):
-	container.repository.initialize()
-	if container.repository.is_exists():
-		container.pipeline.run()  # Only runs on first start
-	yield
-	container.repository.close()
-```
-
-First launch: pipeline processes all data (~15s), persists to SQLite.
-Subsequent launches: data already in DB, starts in <1s.
+| Case | Handling Strategy |
+|------|-------------------|
+| **Malformed CSV rows** | `FileService` catches `ValidationError` per row, logs warning, and continues (skips bad rows). |
+| **Missing Aircraft** | `INNER JOIN` in SQL between `flights` and `aircraft`. Flights with unknown equipment are automatically excluded from the capacity table (as they cannot have calculated capacity). |
+| **Empty File / No Data** | Pipeline logs "0 events processed" but doesn't crash. |
+| **Re-run Pipeline** | `PipelineService` checks for existing processed files or DB state to avoid duplicate processing (idempotency). |
 
 ---
 
-## Data Observations (Challenge Q2 Hint)
+## 7. Cloud Scale Proposal (AWS & Kafka)
 
-| Observation | Impact | How We Handle It |
-|---|---|---|
-| CSV delimiter is `;` not `,` | Would parse as 1 column if using default comma | `csv.DictReader(delimiter=";")` |
-| ~19% rows have empty `flight`, `origin_iata` | Flights without origin/dest can't form a route | `_first_nonempty` across events; still stored if at least one event has the field |
-| 612 equipment codes not in aircraft details | Can't calculate capacity for ~93K flights | Logged as warning; flights skipped in capacity table |
-| `flight_id` can be empty | Some rows are ground movements or test signals | Filtered out in `FlightAggregator` |
-| Some `flight_id`s have no equipment across all events | No aircraft to join | Filtered out in `_build_flight()` |
+We present two distinct architectural approaches for scaling the pipeline: **Option A (AWS Serverless)** for cost-effective batch processing of large datasets, and **Option B (Kafka Streaming)** for low-latency real-time ingestion.
 
-### Pipeline Statistics (Real Data)
+### Option A: AWS Serverless Import Pipeline (Batch)
+
+Ideal for processing massive daily CSV dumps (e.g., 700M rows) with predictable costs and zero idle infrastructure.
+
+#### Architecture Overview
+
+Serverless, event-driven pipeline: **S3 → EventBridge → Step Functions (Distributed Map) → Lambda → Aurora/DynamoDB**
+
+```mermaid
+graph LR
+    subgraph Ingestion
+        U[Client] -- "Upload CSV" --> S3[S3 Bucket]
+        S3 -- "S3 Event" --> EB[EventBridge]
+    end 
+
+    subgraph Processing
+        EB --> SF[Step Functions]
+        SF -- "Map & Scatter" --> L[Lambda Workers]
+    end
+
+    subgraph Persistence
+        L -- "Write Batches" --> A[(Aurora Serverless)]
+        A -- "Update View" --> D[(DynamoDB)]
+    end
+```
+
+#### Design Decisions
+
+| Decision                         | Justification                                                          |
+|----------------------------------|------------------------------------------------------------------------|
+| **S3 Event Notifications**       | Triggers processing immediately upon file upload                       |
+| **Step Functions Distributed Map**| Parallelizes processing of 1000s of file chunks simultaneously        |
+| **Lambda for parsing**           | Stateless, auto-scaling compute for CSV → JSON conversion              |
+| **Aurora Serverless v2**         | Auto-scaling relational DB for complex SQL aggregations (replacing SQLite) |
+| **DynamoDB for caching**         | Low-latency read replica for the public API capacity endpoint          |
+| **S3 Lifecycle Policies**        | Automatically transition raw logs to Glacier for compliance            |
+
+#### Flow Summary
 
 ```
-Aircraft loaded:        100
-Events loaded:      700,000  (100K × 7 files)
-Events grouped:     202,407  (unique flight_ids)
-Flights built:      198,821  (after filtering no-equipment)
-Capacity computed:  106,086  (after joining with 100 aircraft types)
-Unmatched equip:        612  (codes with no aircraft details)
+1. Upload: 700M row CSV uploaded to S3 (raw/)
+2. Trigger: S3 Event → EventBridge → Step Functions
+3. Map State: Split CSV into 10k chunks → Invoke 1000 concurrent Lambdas
+4. Process: Validate → Parse → Persist to Staging (Aurora)
+5. Aggregate: Trigger stored procedure to deduplicate flight events & join aircraft
+6. Publish: Write final capacity results to DynamoDB
 ```
+
+#### Medallion Architecture (AWS)
+
+The pipeline stages data through S3 prefixes and DB tables for auditability:
+
+| Layer      | S3 Prefix / DB Table        | Data State                                         |
+|------------|-----------------------------|----------------------------------------------------|
+| **Bronze** | `s3://raw/events/`          | Original immutable CSVs from data providers        |
+| **Silver** | `db.flight_events_staging`  | Validated, typed, but duplicate event rows         |
+| **Gold**   | `db.capacity_daily`         | Aggregated flights joined with aircraft details    |
 
 ---
 
-## Technology Choices Summary
+### Option B: Kafka Event Streaming (Cloud-Agnostic)
 
-| Decision | Chosen | Rejected | Reason |
-|----------|--------|----------|--------|
-| Processing model | **Batch pipeline** | Streaming (Kafka/Flink) | Historical data, 76 MB, no real-time need |
-| Data parsing | **Pure Python** (`csv`, `json`) | Polars/Pandas | Simpler; Pydantic validation per row; no extra deps |
-| Domain models | **Pydantic BaseModel** | dataclasses | Need validation on CSV parse + API serialization |
-| Persistence | **SQLite** | In-memory only / PostgreSQL | Survives restarts; stdlib; indexes for fast queries |
-| Architecture | **Services** | Use-case classes | 4 operations don't need 4 classes with 1 method each |
-| DI | **Manual AppContainer** | dependency-injector lib | One file, zero magic, easy to test |
-| API | **FastAPI** | Flask/Django | Async, auto-docs, Pydantic-native |
-| Testing | **pytest** | unittest | Fixtures, parametrize, cleaner syntax |
+Ideal for a robust, self-hosted, or multi-cloud event-driven pipeline that processes file uploads and updates downstream systems in near real-time.
 
+#### Architecture Overview
+
+Event-driven, cloud-agnostic pipeline: **MinIO → Kafka → Consumers → PostgreSQL/Elasticsearch**
+
+```mermaid
+graph LR
+    subgraph Ingestion
+        C[Client] -- "Upload CSV" --> M[MinIO]
+        M -- "Notification" --> K[Kafka + KRaft]
+    end
+
+    subgraph Processing
+        K -- "Consume" --> G[Consumer Groups]
+        G -- "Check Cache" --> R[(Redis)]
+        G -- "Persist" --> DB[(PostgreSQL)]
+    end
+
+    subgraph "Search & Analytics"
+        DB -- "CDC (Debezium)" --> K
+        K -- "Index" --> E[(Elasticsearch)]
+    end
+```
+
+#### Design Decisions
+
+| Decision                  | Justification                                                                                |
+|---------------------------|----------------------------------------------------------------------------------------------|
+| **Kafka + KRaft**         | High throughput, message replay, no Zookeeper dependency (KRaft is built-in since Kafka 3.5) |
+| **Pre-signed MinIO URL**  | S3-compatible; client uploads CSVs directly, no API payload limits                           |
+| **Kafka Consumer Groups** | Horizontal scaling, back-pressure handling, exactly-once semantics                           |
+| **PgBouncer**             | Connection pooling prevents DB exhaustion from parallel consumers                            |
+| **PostgreSQL**            | ACID compliance for flight data, JSONB for flexible event attributes                         |
+| **Elasticsearch**         | High-performance search by origin, destination, equipment, or date                           |
+| **Redis**                 | Sub-ms job status lookups & capacity caching, TTL auto-expiry                                |
+| **Debezium CDC**          | Real-time PostgreSQL → Kafka sync for Elasticsearch updates                                  |
+| **Celery or Airflow**     | Celery for real-time tasks; Airflow for complex DAGs/batch jobs                              |
+| **Dead Letter Queue**     | Failed messages → DLQ → Error Handler → notify uploader                                      |
+
+#### Flow Summary
+
+```
+1. Request: Client POST /jobs → API saves job in Redis, returns pre-signed MinIO URL
+2. Upload: Client uploads CSV → MinIO (raw/)
+3. Trigger: MinIO Event → Kafka (flight.uploads topic)
+4. Pipeline: Validate → Parse → Deduplicate → Join Aircraft → Persist → Index
+5. Error: Retry with backoff → DLQ → Error Handler → notify uploader
+```
+
+#### Medallion Architecture (Kafka/MinIO)
+
+The pipeline stages data through MinIO prefixes and Kafka topics for full auditability:
+
+| Layer      | MinIO / Kafka Topic          | Data State                                         |
+|------------|------------------------------|----------------------------------------------------|
+| **Bronze** | `minio://raw/{job_id}/`      | Original CSV upload from client                    |
+| **Silver** | `topic: flight.events.clean` | Validated, parsed, and deduplicated flight events  |
+| **Gold**   | `topic: capacity.updates`    | Final calculated capacity (Payload/Volume)         |
+| **Bronze** | `events.raw.adsb`            | Raw binary/JSON stream from receivers              |
+| **Silver** | `events.flights.sessionized` | Completed flights (deduplicated events)            |
+| **Gold**   | `business.capacity.updates`  | Final capacity Calculation (Payload/Volume)        |
+
+### Trade-off Comparison
+
+| Feature | AWS Serverless (Option A) | Kafka Streaming (Option B) |
+|---------|---------------------------|----------------------------|
+| **Latency** | Minutes/Hours (Batch) | Seconds (Real-time) |
+| **Cost** | Pay-per-execution (Low for spikey loads) | Always-on cluster (High baseline) |
+| **Complexity**| Moderate (Stateless) | High (Stateful windowing, watermarks) |
+| **Replayability**| Re-drive Step Function | Replay Kafka Offset |
