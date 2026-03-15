@@ -9,12 +9,12 @@ from src.domains.capacity import Capacity, CapacitySummary
 from src.domains.flight import Flight
 from src.domains.flight_event import FlightEvent
 from src.repositories import queries
-from src.repositories.interfaces import AbstractRepository
+from src.repositories.interfaces import RepositoryProtocol
 
 logger = logging.getLogger(__name__)
 
 
-class SQLiteRepository(AbstractRepository):
+class SQLiteRepository(RepositoryProtocol):
     __slots__ = ("_database_path", "_active_connection")
 
     def __init__(self, database_path: Path):

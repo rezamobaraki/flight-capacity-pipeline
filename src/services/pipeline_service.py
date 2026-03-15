@@ -2,7 +2,7 @@ import logging
 from pathlib import Path
 
 from src.domains.capacity import Capacity
-from src.repositories.interfaces import AbstractRepository
+from src.repositories.interfaces import RepositoryProtocol
 from src.services.file_service import FileService
 
 logger = logging.getLogger(__name__)
@@ -12,7 +12,7 @@ class PipelineService:
     def __init__(
         self,
         file_service: FileService,
-        repository: AbstractRepository,
+        repository: RepositoryProtocol,
         aircraft_path: Path,
         events_dir: Path,
         processed_dir: Path,

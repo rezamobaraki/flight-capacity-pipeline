@@ -1,4 +1,4 @@
-from src.repositories.interfaces import AbstractRepository
+from src.repositories.interfaces import RepositoryProtocol
 
 
-__all__ = ("AbstractRepository",)
+__all__ = ("RepositoryProtocol",)

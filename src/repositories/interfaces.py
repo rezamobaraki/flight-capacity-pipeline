@@ -34,15 +34,9 @@ class RepositoryProtocol(Protocol):
     ) -> Iterator[Capacity]: ...
 
     def stream_capacity_summary(
-        self,
-        origin: str,
-        destination: str,
-        date: str | None = None
+        self, origin: str, destination: str, date: str | None = None
     ) -> Iterator[CapacitySummary]: ...
 
     def stream_aircraft(self) -> Iterator[Aircraft]: ...
 
     def close(self) -> None: ...
-
-
-AbstractRepository = RepositoryProtocol

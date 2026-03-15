@@ -1,7 +1,7 @@
 from functools import cache
 from typing import Iterator
 
-from src.repositories.interfaces import AbstractRepository
+from src.repositories.interfaces import RepositoryProtocol
 from src.repositories.sqlite_repository import SQLiteRepository
 from src.core.settings import Settings
 from src.services.file_service import FileService
@@ -37,7 +37,7 @@ def get_settings():
     return container.settings
 
 
-def get_repository() -> Iterator[AbstractRepository]:
+def get_repository() -> Iterator[RepositoryProtocol]:
     repository = SQLiteRepository(container.settings.DATABASE_PATH)
     repository.initialize()
 
