@@ -86,3 +86,4 @@ The project is fully containerized as **Flight Capacity Pipeline**. You can run 
 
 For detailed design decisions, architecture diagrams, and cloud scaling proposals, please refer to:
 - [Design & Architecture](docs/design_architecture.md)
+- [Excalidraw](https://excalidraw.com/#json=Is8leyFiz5cQk8VkuJQgX,pTcPe8WfFd0Fm4fdSKpjGA)) 
