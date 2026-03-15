@@ -173,7 +173,7 @@ graph LR
 ### Project Structure
 
 ```
-rotate/
+flight-capacity-pipeline/
 ├── src/
 │   ├── core/                          # Configuration & wiring (DI Container)
 │   ├── domains/                       # Pydantic domain models

@@ -1,5 +1,5 @@
 [project]
-name = "rotate"
+name = "flight-capacity-pipeline"
 version = "0.1.0"
 description = "Cargo capacity calculator for airline flight data"
 requires-python = ">=3.14.3"

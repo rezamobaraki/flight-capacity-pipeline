@@ -11,7 +11,7 @@ from handlers.http import capacity, health, triggers
 def create_app() -> FastAPI:
     logging.basicConfig(level=container.settings.LOG_LEVEL, format=container.settings.LOG_FORMAT)
 
-    app = FastAPI(title="Rotate Cargo Capacity API", version="0.1.0")
+    app = FastAPI(title="Flight Capacity Pipeline API", version="0.1.0")
     app.include_router(health.router)
     app.include_router(capacity.router)
     app.include_router(triggers.router)

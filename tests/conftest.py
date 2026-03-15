@@ -73,7 +73,7 @@ def settings(tmp_data_dir):
     s.PROCESSED_DIR = tmp_data_dir / "processed"
     s.WAREHOUSE_DIR = tmp_data_dir / "warehouse"
     s.AIRCRAFT_FILE = tmp_data_dir / "airplane_details_original.json"
-    s.DATABASE_PATH = s.WAREHOUSE_DIR / "rotate_test.db"
+    s.DATABASE_PATH = s.WAREHOUSE_DIR / "flight_capacity_test.db"
     s.CAPACITY_OUTPUT_FILE = s.WAREHOUSE_DIR / "capacity_table.csv"
     return s
 
