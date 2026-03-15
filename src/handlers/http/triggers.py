@@ -18,6 +18,7 @@ def _run_pipeline_background() -> None:
         return
 
     try:
+        container.repository.initialize()
         logger.info("Starting background pipeline execution...")
         container.pipeline.run()
         logger.info("Background pipeline execution finished.")
@@ -26,6 +27,10 @@ def _run_pipeline_background() -> None:
     except Exception as e:
         logger.error(f"Unexpected error in background pipeline: {e}", exc_info=True)
     finally:
+        try:
+            container.repository.close()
+        except Exception as e:
+            logger.warning(f"Failed to close repository: {e}")
         _PIPELINE_LOCK.release()
 
 @router.post("/ingest", status_code=202)

@@ -2,6 +2,7 @@ import logging
 
 import uvicorn
 from fastapi import FastAPI
+from fastapi.responses import RedirectResponse
 
 from src.core.container import container
 from src.core.exception_handlers import setup_exception_handlers
@@ -15,6 +16,10 @@ def create_app() -> FastAPI:
     app.include_router(health.router)
     app.include_router(capacity.router)
     app.include_router(triggers.router)
+
+    @app.get("/", include_in_schema=False)
+    async def root():
+        return RedirectResponse(url="/docs")
 
     setup_exception_handlers(app)
 
