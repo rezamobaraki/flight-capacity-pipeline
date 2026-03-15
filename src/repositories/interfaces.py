@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+from pathlib import Path
 from typing import Iterable, Iterator, Protocol
 
 from src.domains.aircraft import Aircraft
@@ -46,3 +47,7 @@ class RepositoryProtocol(Protocol):
     def mark_file_processed(self, filename: str) -> None: ...
 
     def close(self) -> None: ...
+
+    def ingest_csv_direct(self, csv_path: Path) -> int | None: ...
+
+    def export_capacity_csv(self, output_path: Path) -> bool: ...

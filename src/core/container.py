@@ -1,6 +1,8 @@
+import os
 from functools import cache
 from typing import Iterator
 
+from repositories import DuckDBRepository
 from src.repositories.interfaces import RepositoryProtocol
 from src.repositories.sqlite_repository import SQLiteRepository
 from src.core.settings import Settings
@@ -11,7 +13,12 @@ from src.services.pipeline_service import PipelineService
 class ContainerRegistry:
     def __init__(self, settings: Settings | None = None):
         self.settings = settings or Settings()
-        self.repository = SQLiteRepository(self.settings.DATABASE_PATH)
+        backend = os.getenv("DB_BACKEND", "sqlite").lower()
+        if backend == "duckdb":
+            self.repository = DuckDBRepository(self.settings.DATABASE_PATH.with_suffix(".duckdb"))
+        else:
+            self.repository = SQLiteRepository(self.settings.DATABASE_PATH)
+
         self.file_service = FileService()
 
         self.pipeline = PipelineService(
