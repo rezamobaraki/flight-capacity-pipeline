@@ -383,4 +383,6 @@ pyrightconfig.json
 .idea/
 .data/flight_events
 
-n
+# Ignore local database files
+*.db
+data/*.db
