@@ -10,7 +10,7 @@ class CapacityResponse(BaseModel):
     equipment: str
     aircraft_name: str
     category: str
-    volume_m3: float
-    payload_kg: float
+    volume_m3: float | None
+    payload_kg: float | None
     operator: str
 

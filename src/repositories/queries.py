@@ -60,30 +60,43 @@ CREATE_TABLES_SCRIPT = """
         ON capacity(date);
     CREATE INDEX IF NOT EXISTS idx_events_flight_id
         ON events(flight_id);
+
+    CREATE TABLE IF NOT EXISTS processed_files (
+        filename TEXT PRIMARY KEY,
+        processed_at TEXT DEFAULT CURRENT_TIMESTAMP
+    );
 """
 
 CHECK_IS_EXISTS = "SELECT COUNT(*) FROM capacity"
 
+CHECK_FILE_PROCESSED = "SELECT 1 FROM processed_files WHERE filename = :filename"
+
+MARK_FILE_PROCESSED = "INSERT INTO processed_files (filename) VALUES (:filename)"
+
 AGGREGATE_FLIGHTS = """
-    INSERT OR IGNORE INTO flights (
+    INSERT OR REPLACE INTO flights (
         flight_id, date, equipment, flight_number,
         origin_iata, origin_icao, destination_iata, destination_icao,
         operator, registration
     )
     SELECT
         flight_id,
-        MAX(date) as date,
-        MAX(equipment) as equipment,
-        MAX(flight_number) as flight_number,
-        MAX(origin_iata) as origin_iata,
-        MAX(origin_icao) as origin_icao,
-        MAX(destination_iata) as destination_iata,
-        MAX(destination_icao) as destination_icao,
-        MAX(operator) as operator,
-        MAX(registration) as registration
-    FROM events
-    GROUP BY flight_id
-    HAVING MAX(equipment) != '' AND MAX(equipment) IS NOT NULL;
+        date,
+        equipment,
+        flight_number,
+        origin_iata,
+        origin_icao,
+        destination_iata,
+        destination_icao,
+        operator,
+        registration
+    FROM (
+        SELECT 
+            *,
+            ROW_NUMBER() OVER (PARTITION BY flight_id ORDER BY date DESC, time DESC) as rn
+        FROM events
+    )
+    WHERE rn = 1;
 """
 
 INSERT_EVENT = """
@@ -170,14 +183,13 @@ CALCULATE_CAPACITY = """
         f.destination_iata,
         f.destination_icao,
         f.equipment,
-        a.full_name as aircraft_name,
-        a.category,
-        a.volume as volume_m3,
-        a.payload as payload_kg,
+        COALESCE(a.full_name, 'Unknown Aircraft'),
+        COALESCE(a.category, 'unknown_aircraft'),
+        a.volume,
+        a.payload,
         f.operator
     FROM flights f
-    JOIN aircraft a ON f.equipment = a.code_icao
-    WHERE f.equipment IS NOT NULL AND f.equipment != '';
+    LEFT JOIN aircraft a ON f.equipment = a.code_icao;
 """
 
 SELECT_ALL_AIRCRAFT = "SELECT * FROM aircraft"
@@ -187,9 +199,11 @@ SELECT_CAPACITY_BASE = "SELECT * FROM capacity WHERE 1=1"
 SELECT_CAPACITY_SUMMARY = """
     SELECT
         date,
+        MAX(origin_iata) as origin_iata,
+        MAX(destination_iata) as destination_iata,
         COUNT(*) as total_flights,
-        ROUND(SUM(volume_m3), 2) as total_volume_m3,
-        ROUND(SUM(payload_kg), 2) as total_payload_kg
+        COALESCE(ROUND(SUM(volume_m3), 2), 0.0) as total_volume_m3,
+        COALESCE(ROUND(SUM(payload_kg), 2), 0.0) as total_payload_kg
     FROM capacity
-    WHERE origin_iata = :origin AND destination_iata = :destination
+    WHERE 1=1
 """

@@ -12,8 +12,8 @@ class Capacity(BaseModel):
     equipment: str = ""
     aircraft_name: str = ""
     category: str = ""
-    volume_m3: float = 0.0
-    payload_kg: float = 0.0
+    volume_m3: float | None = None
+    payload_kg: float | None = None
     operator: str = ""
 
 

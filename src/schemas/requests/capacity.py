@@ -19,6 +19,17 @@ class CapacityRequest(BaseModel):
         pattern=r"^\d{4}-\d{2}-\d{2}$",
         description="Filter by date (YYYY-MM-DD)"
     )
+    limit: int = Field(
+        default=100,
+        ge=1,
+        le=1000,
+        description="Number of records to return"
+    )
+    offset: int = Field(
+        default=0,
+        ge=0,
+        description="Offset for pagination"
+    )
 
     @field_validator("origin", "destination")
     @classmethod

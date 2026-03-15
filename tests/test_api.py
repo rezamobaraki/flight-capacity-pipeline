@@ -3,7 +3,7 @@ from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 
 from src.core import container as container_module  # Renamed for clarity within test if needed
-from handlers.http import capacity, health
+from src.handlers.http import capacity, health
 
 
 @pytest.fixture
@@ -39,8 +39,8 @@ class TestCapacityEndpoint:
         response = await client.get("/api/v1/capacity")
         assert response.status_code == 200
         data = response.json()
-        assert data["count"] == 2
-        assert len(data["capacities"]) == 2
+        assert data["count"] == 3
+        assert len(data["capacities"]) == 3
 
     @pytest.mark.anyio
     async def test_filter_by_origin(self, client):

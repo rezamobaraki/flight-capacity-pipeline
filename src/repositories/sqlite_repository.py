@@ -94,22 +94,37 @@ class SQLiteRepository(RepositoryProtocol):
                 yield Flight.model_validate(dict(row))
 
     def stream_capacities(
-        self, origin: str | None = None, destination: str | None = None, date: str | None = None
+        self,
+        origin: str | None = None,
+        destination: str | None = None,
+        date: str | None = None,
+        limit: int = 100,
+        offset: int = 0,
     ) -> Iterator[Capacity]:
         query = queries.SELECT_CAPACITY_BASE
-        parameters: dict[str, str] = {}
+        parameters: dict[str, str | int] = {}
 
         if origin:
-            query += " AND origin_iata = :origin"
+            if len(origin) == 3:
+                query += " AND origin_iata = :origin"
+            else:
+                query += " AND origin_icao = :origin"
             parameters["origin"] = origin.upper()
+
         if destination:
-            query += " AND destination_iata = :destination"
+            if len(destination) == 3:
+                query += " AND destination_iata = :destination"
+            else:
+                query += " AND destination_icao = :destination"
             parameters["destination"] = destination.upper()
+
         if date:
             query += " AND date = :date"
             parameters["date"] = date
 
-        query += " ORDER BY date, origin_iata, destination_iata"
+        query += " ORDER BY date, origin_iata, destination_iata LIMIT :limit OFFSET :offset"
+        parameters["limit"] = limit
+        parameters["offset"] = offset
 
         cursor = self.connection.execute(query, parameters)
         for row in cursor:
@@ -122,7 +137,17 @@ class SQLiteRepository(RepositoryProtocol):
         date: str | None = None
     ) -> Iterator[CapacitySummary]:
         query = queries.SELECT_CAPACITY_SUMMARY
-        parameters = {"origin": origin, "destination": destination}
+        parameters = {"origin": origin.upper(), "destination": destination.upper()}
+
+        if len(origin) == 3:
+            query += " AND origin_iata = :origin"
+        else:
+            query += " AND origin_icao = :origin"
+
+        if len(destination) == 3:
+            query += " AND destination_iata = :destination"
+        else:
+            query += " AND destination_icao = :destination"
 
         if date:
             query += " AND date = :date"
@@ -132,11 +157,7 @@ class SQLiteRepository(RepositoryProtocol):
 
         cursor = self.connection.execute(query, parameters)
         for row in cursor:
-            yield CapacitySummary(
-                origin_iata=origin,
-                destination_iata=destination,
-                **dict(row)
-            )
+            yield CapacitySummary(**dict(row))
 
     def stream_aircraft(self) -> Iterator[Aircraft]:
         cursor = self.connection.execute(queries.SELECT_ALL_AIRCRAFT)
@@ -152,6 +173,13 @@ class SQLiteRepository(RepositoryProtocol):
     def __exit__(self, exc_type, exc_val, exc_tb) -> None:
         self.close()
 
+    def is_file_processed(self, filename: str) -> bool:
+        cursor = self.connection.execute(queries.CHECK_FILE_PROCESSED, {"filename": filename})
+        return cursor.fetchone() is not None
+
+    def mark_file_processed(self, filename: str) -> None:
+        with self.connection as conn:
+            conn.execute(queries.MARK_FILE_PROCESSED, {"filename": filename})
 
     @staticmethod
     def _chunk_stream(iterator: Iterable, size: int = 1000) -> Iterator[list]:

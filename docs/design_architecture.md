@@ -19,7 +19,7 @@
 | Dataset | Format | Size | Description |
 |---|---|---|---|
 | `flight_events/*.csv` | Semicolon-delimited CSV, 7 files (Oct 3–9, 2022) | **700K rows, 76 MB** | Real-time ADS-B events from Flightradar24 |
-| `airplane_details_original.json` | JSONL (one JSON object per line) | **100 rows, 16 KB** | Aircraft specs: payload (kg) + volume (m³) |
+| `airplane_details.json` | JSONL (one JSON object per line) | **100 rows, 16 KB** | Aircraft specs: payload (kg) + volume (m³) |
 
 ### Key Data Characteristics
 
@@ -109,7 +109,7 @@ classDiagram
 
 ```bash
 # Initialize DB, run pipeline (extract -> load -> transform), and export results
-python src/cli.py pipeline
+python -m src.cli ingest
 ```
 
 ### REST API (FastAPI)
@@ -121,8 +121,8 @@ uvicorn src.handlers.http.app:create_app --factory --port 8000
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | `GET` | `/health` | Health check |
-| `GET` | `/api/v1/capacity?origin=X&destination=Y&date=Z` | Per-flight capacity list, all filters optional |
-| `GET` | `/api/v1/capacity/summary?origin=X&destination=Y` | Daily aggregated summary for a route |
+| `GET` | `/api/v1/capacity?origin=X...&limit=100&offset=0` | Per-flight capacity list. Filters: origin, destination (IATA/ICAO), date. Pagination included. |
+| `GET` | `/api/v1/capacity/summary?origin=X&destination=Y` | Daily aggregated summary for a route (IATA or ICAO). |
 
 ---
 
@@ -209,7 +209,8 @@ flight-capacity-pipeline/
 **Solution:** Delegate transformation to the database engine.
 1.  **Extract:** `FileService` streams lines from CSVs using generators (memory efficient).
 2.  **Load:** `SQLiteRepository` uses `executemany` for bulk insertion into a staging table (`raw_flight_events`).
-3.  **Transform:** A single SQL query aggregates events into flights using `GROUP BY flight_id` and `MAX()` strategies to Pick non-empty values.
+    *   **Idempotency:** A `processed_files` table tracks imported files. Files are skipped if already processed.
+3.  **Transform:** SQL queries aggregate events into flights using window functions (`ROW_NUMBER()`) to pick the latest event deterministically.
 
 **Trade-off:**
 *   *Pros:* Very fast (SQLite is C-optimized), drastically simpler Python code.
@@ -220,26 +221,25 @@ flight-capacity-pipeline/
 **SQL Logic in `queries.py`:**
 ```sql
 INSERT INTO flights (...)
-SELECT
-    flight_id,
-    MAX(flight_number),
-    MAX(date),
-    MAX(origin_iata),
-    ...
-FROM raw_flight_events
-GROUP BY flight_id
-HAVING flight_id IS NOT NULL;
+SELECT ...
+FROM (
+    SELECT 
+        *,
+        ROW_NUMBER() OVER (PARTITION BY flight_id ORDER BY date DESC, time DESC) as rn
+    FROM events
+)
+WHERE rn = 1;
 ```
-This handles the "multiple events per flight" by collapsing them into one record, taking the most complete data available.
+This handles "multiple events per flight" deterministically by selecting the *latest* event for each flight ID.
 
 ### 6.3 Edge Cases & Error Handling
 
 | Case | Handling Strategy |
 |------|-------------------|
 | **Malformed CSV rows** | `FileService` catches `ValidationError` per row, logs warning, and continues (skips bad rows). |
-| **Missing Aircraft** | `INNER JOIN` in SQL between `flights` and `aircraft`. Flights with unknown equipment are automatically excluded from the capacity table (as they cannot have calculated capacity). |
+| **Missing Aircraft** | `LEFT JOIN` in SQL between `flights` and `aircraft`. Flights with unknown equipment are INCLUDED with `unknown_aircraft` status and NULL capacity. |
 | **Empty File / No Data** | Pipeline logs "0 events processed" but doesn't crash. |
-| **Re-run Pipeline** | `PipelineService` checks for existing processed files or DB state to avoid duplicate processing (idempotency). |
+| **Re-run Pipeline** | `PipelineService` checks for existing processed files in `processed_files` table to avoid duplicate processing (idempotency). |
 
 ---
 

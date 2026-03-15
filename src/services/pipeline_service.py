@@ -38,11 +38,16 @@ class PipelineService:
         total_events = 0
 
         for file_path in events_files:
+            if self._repository.is_file_processed(file_path.name):
+                logger.info("Skipping already processed file: %s", file_path.name)
+                continue
+
             logger.info("Processing flight events file: %s", file_path.name)
             events = self._file_service.stream_events_from_file(file_path)
             count = self._repository.bulk_insert_events(events)
             total_events += count
 
+            self._repository.mark_file_processed(file_path.name)
             self._file_service.copy_to_processed(file_path, self._processed_dir)
 
         logger.info("Inserted %d total raw flight events", total_events)

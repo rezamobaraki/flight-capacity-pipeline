@@ -22,7 +22,13 @@ async def get_capacity(
     params: CapacityRequest = Depends(),
     repository: RepositoryProtocol = Depends(get_repository),
 ) -> CapacityListResponse:
-    capacity_iter = repository.stream_capacities(origin=params.origin, destination=params.destination, date=params.date)
+    capacity_iter = repository.stream_capacities(
+        origin=params.origin,
+        destination=params.destination,
+        date=params.date,
+        limit=params.limit,
+        offset=params.offset,
+    )
     capacities = list(capacity_iter)
     return CapacityListResponse(
         count=len(capacities),

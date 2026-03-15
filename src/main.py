@@ -6,7 +6,7 @@ from fastapi.responses import RedirectResponse
 
 from src.core.container import container
 from src.core.exception_handlers import setup_exception_handlers
-from handlers.http import capacity, health, triggers
+from src.handlers.http import capacity, health, triggers
 
 
 def create_app() -> FastAPI:

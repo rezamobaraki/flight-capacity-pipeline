@@ -4,8 +4,8 @@ import pytest
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 
-from handlers.http import capacity, health, triggers
 from src.core import container as container_module
+from src.handlers.http import capacity, health, triggers
 
 
 @pytest.fixture

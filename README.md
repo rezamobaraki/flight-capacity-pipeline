@@ -5,9 +5,10 @@ A data engineering pipeline and API that calculates available cargo capacity (pa
 ## 🚀 Features
 
 - **Ingestion**: Efficiently processes daily flight event CSVs and aircraft JSON data.
-- **Transformation**: Aggregates raw events into flights using SQL-based ELT pattern.
-- **Capacity Calculation**: Determines payload and volume for each flight.
-- **API**: Exposes flight capacity data via a RESTful API.
+- **Idempotency**: Prevents duplicate processing of the same file even if ingestion is re-run.
+- **Transformation**: Aggregates raw events into flights using deterministic SQL aggregation.
+- **Capacity Calculation**: Determines payload and volume for each flight (handles unknown aircraft gracefully).
+- **API**: Exposes flight capacity data via a RESTful API with pagination and flexible IATA/ICAO filtering.
 - **Dockerized**: Fully containerized for easy deployment and testing.
 
 ## 🛠 Prerequisites

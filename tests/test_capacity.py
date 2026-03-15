@@ -41,7 +41,7 @@ class TestCapacityRepository:
         assert c2.payload_kg == 83417.60
         assert c2.aircraft_name == "Airbus A380-800"
 
-    def test_calculate_skips_unmatched_equipment(self, repository, sample_aircraft):
+    def test_calculate_includes_unmatched_equipment(self, repository, sample_aircraft):
         repository.bulk_insert_aircraft(sample_aircraft)
         flights = [
             Flight(
@@ -56,9 +56,16 @@ class TestCapacityRepository:
 
         count = repository.calculate_capacity()
 
-        assert count == 0
+        assert count == 1
         capacities = list(repository.stream_capacities())
-        assert len(capacities) == 0
+        assert len(capacities) == 1
+
+        c = capacities[0]
+        assert c.equipment == "ZZZZ"
+        assert c.aircraft_name == "Unknown Aircraft"
+        assert c.category == "unknown_aircraft"
+        assert c.volume_m3 is None
+        assert c.payload_kg is None
 
     def test_calculate_preserves_flight_data(self, repository, sample_aircraft):
         repository.bulk_insert_aircraft(sample_aircraft)
